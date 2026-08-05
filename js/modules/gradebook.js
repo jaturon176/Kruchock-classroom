@@ -23,6 +23,12 @@ export class GradebookModule {
     const quizzes = firebaseService.getCollection('quizzes') || [];
     const currentUser = this.rbac.getCurrentUser();
 
+    // 🎓🔒 STUDENT RESTRICTION: Students can ONLY view their own scores!
+    if (currentUser.role === 'Student') {
+      this.renderStudentView(containerEl, currentUser, homeworkList, quizzes);
+      return;
+    }
+
     const allStudentUsers = users.filter(u => u.role === 'Student');
 
     // Available Grades
@@ -340,6 +346,264 @@ export class GradebookModule {
       printPDFReport(
         `ใบสรุปรายงานผลคะแนนนักเรียน (${this.selectedGrade === 'All' ? 'ทุกระดับชั้น' : this.selectedGrade} ${this.selectedRoom === 'All' ? 'ทุกห้อง' : 'ห้อง ' + this.selectedRoom})`,
         `ประจำปีการศึกษา 2026 - รวมคะแนนการบ้านและแบบทดสอบออนไลน์`,
+        headers,
+        dataRows
+      );
+    });
+  }
+
+  // 🎓 Personal Gradebook View for Logged-In Student
+  renderStudentView(containerEl, currentUser, homeworkList, quizzes) {
+    const stdId = currentUser.studentId || currentUser.username || '';
+    const stdName = decodeMojibakeThai(currentUser.name);
+
+    // 1. Calculate Homework Scores for logged in student
+    let totalHwPoints = 0;
+    let earnedHwPoints = 0;
+    const hwDetails = homeworkList.map(hw => {
+      const maxP = hw.maxPoints || 20;
+      totalHwPoints += maxP;
+      const sub = hw.submissions ? hw.submissions.find(s => 
+        (s.studentId && stdId && s.studentId.toLowerCase() === stdId.toLowerCase()) ||
+        (s.studentName && s.studentName.toLowerCase() === stdName.toLowerCase())
+      ) : null;
+
+      let scoreVal = 0;
+      let statusText = 'ยังไม่ส่ง';
+      let statusClass = 'bg-rose-50 text-rose-700 border-rose-200';
+
+      if (sub) {
+        if (sub.score !== null && sub.score !== undefined) {
+          scoreVal = sub.score;
+          earnedHwPoints += scoreVal;
+          statusText = `ตรวจแล้ว (${scoreVal}/${maxP})`;
+          statusClass = 'bg-emerald-50 text-emerald-700 border-emerald-200';
+        } else {
+          statusText = 'ส่งแล้ว (รอตรวจ)';
+          statusClass = 'bg-amber-50 text-amber-700 border-amber-200';
+        }
+      }
+
+      return {
+        title: decodeMojibakeThai(hw.title),
+        subject: decodeMojibakeThai(hw.subject || 'ทั่วไป'),
+        dueDate: hw.dueDate || '-',
+        maxPoints: maxP,
+        score: scoreVal,
+        submitted: !!sub,
+        statusText,
+        statusClass
+      };
+    });
+
+    // 2. Calculate Quiz Scores for logged in student
+    let totalQuizPoints = 0;
+    let earnedQuizPoints = 0;
+    const quizDetails = quizzes.map(q => {
+      const qMax = q.questions ? q.questions.reduce((sum, item) => sum + (parseInt(item.points, 10) || 1), 0) : 1;
+      totalQuizPoints += qMax;
+
+      const myResult = (q.results && Array.isArray(q.results)) ? q.results.find(r => 
+        (r.studentId && stdId && r.studentId.toLowerCase() === stdId.toLowerCase()) ||
+        (r.studentName && r.studentName.toLowerCase() === stdName.toLowerCase())
+      ) : null;
+
+      let scoreVal = 0;
+      let statusText = 'ยังไม่ได้ทำ';
+      let statusClass = 'bg-slate-100 text-slate-600 border-slate-200';
+
+      if (myResult) {
+        scoreVal = myResult.score || 0;
+        earnedQuizPoints += scoreVal;
+        statusText = `ทำแล้ว (${scoreVal}/${qMax})`;
+        statusClass = 'bg-indigo-50 text-indigo-700 border-indigo-200';
+      }
+
+      return {
+        title: decodeMojibakeThai(q.title),
+        subject: decodeMojibakeThai(q.subject || 'ทั่วไป'),
+        maxPoints: qMax,
+        score: scoreVal,
+        completed: !!myResult,
+        statusText,
+        statusClass
+      };
+    });
+
+    // 3. Consolidated totals
+    const grandTotalEarned = earnedHwPoints + earnedQuizPoints;
+    const grandTotalMax = totalHwPoints + totalQuizPoints;
+    const percentage = grandTotalMax > 0 ? Math.round((grandTotalEarned / grandTotalMax) * 100) : 0;
+
+    let gradeLetter = 'F';
+    if (percentage >= 80) gradeLetter = '4 (A)';
+    else if (percentage >= 70) gradeLetter = '3 (B)';
+    else if (percentage >= 60) gradeLetter = '2 (C)';
+    else if (percentage >= 50) gradeLetter = '1 (D)';
+
+    containerEl.innerHTML = `
+      <div class="space-y-6 animate-fade-in">
+        <!-- Student Header Card -->
+        <div class="glass-card p-6 md:p-8 rounded-3xl shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white border border-slate-200">
+          <div class="flex items-center gap-4">
+            <div class="w-14 h-14 rounded-2xl bg-gradient-to-tr from-sky-400 to-indigo-600 p-1 shadow-md shadow-sky-500/20 shrink-0">
+              <div class="w-full h-full rounded-xl bg-white flex items-center justify-center overflow-hidden text-2xl">
+                ${currentUser.avatar && (currentUser.avatar.startsWith('http') || currentUser.avatar.startsWith('data:image')) ? `<img src="${currentUser.avatar}" class="w-full h-full object-cover">` : (currentUser.avatar || '🎓')}
+              </div>
+            </div>
+            <div>
+              <div class="flex items-center gap-2">
+                <h2 class="text-2xl font-bold text-slate-900 font-heading">
+                  ${stdName}
+                </h2>
+                <span class="bg-indigo-50 text-indigo-700 border border-indigo-100 text-xs px-2.5 py-0.5 rounded-full font-mono font-bold">${stdId}</span>
+              </div>
+              <p class="text-slate-500 text-xs mt-1">รายงานผลคะแนนและการเรียนส่วนบุคคล (${currentUser.grade || '-'} / ห้อง ${currentUser.room || '-'})</p>
+            </div>
+          </div>
+
+          <div>
+            <button id="btn-export-student-pdf" class="btn-primary text-xs px-4 py-2.5 rounded-xl font-bold shadow-md shadow-indigo-500/20 flex items-center gap-1.5">
+              <span>🖨️</span> พิมพ์ใบบันทึกผลการเรียน (PDF)
+            </button>
+          </div>
+        </div>
+
+        <!-- Student KPI Score Cards -->
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-5">
+          <!-- Homework Card -->
+          <div class="glass-card p-5 rounded-3xl bg-white border border-slate-200 shadow-sm flex items-center justify-between">
+            <div>
+              <div class="text-xs font-heading font-semibold text-slate-500 uppercase tracking-wider">คะแนนการบ้านของฉัน</div>
+              <div class="text-2xl font-extrabold text-indigo-600 font-heading mt-1">
+                ${earnedHwPoints} <span class="text-xs font-normal text-slate-400">/ ${totalHwPoints} คะแนน</span>
+              </div>
+            </div>
+            <div class="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 border border-indigo-100 flex items-center justify-center text-xl font-bold">
+              📚
+            </div>
+          </div>
+
+          <!-- Quiz Card -->
+          <div class="glass-card p-5 rounded-3xl bg-white border border-slate-200 shadow-sm flex items-center justify-between">
+            <div>
+              <div class="text-xs font-heading font-semibold text-slate-500 uppercase tracking-wider">คะแนนแบบทดสอบของฉัน</div>
+              <div class="text-2xl font-extrabold text-emerald-600 font-heading mt-1">
+                ${earnedQuizPoints} <span class="text-xs font-normal text-slate-400">/ ${totalQuizPoints} คะแนน</span>
+              </div>
+            </div>
+            <div class="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 border border-emerald-100 flex items-center justify-center text-xl font-bold">
+              ✨
+            </div>
+          </div>
+
+          <!-- Total Grade Card -->
+          <div class="glass-card p-5 rounded-3xl bg-white border border-slate-200 shadow-sm flex items-center justify-between">
+            <div>
+              <div class="text-xs font-heading font-semibold text-slate-500 uppercase tracking-wider">คะแนนรวมสะสม / เกรด</div>
+              <div class="text-2xl font-extrabold text-slate-900 font-heading mt-1">
+                ${percentage}% <span class="text-xs font-bold px-2 py-0.5 rounded-full ${
+                  gradeLetter.startsWith('4') ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
+                  gradeLetter.startsWith('3') ? 'bg-sky-50 text-sky-700 border border-sky-200' :
+                  gradeLetter.startsWith('2') ? 'bg-amber-50 text-amber-700 border border-amber-200' :
+                  gradeLetter.startsWith('1') ? 'bg-orange-50 text-orange-700 border border-orange-200' :
+                  'bg-rose-50 text-rose-700 border border-rose-200'
+                }">เกรด ${gradeLetter}</span>
+              </div>
+            </div>
+            <div class="w-12 h-12 rounded-2xl bg-purple-50 text-purple-600 border border-purple-100 flex items-center justify-center text-xl font-bold">
+              🏆
+            </div>
+          </div>
+        </div>
+
+        <!-- Section 1: Homework Scores Detail Table -->
+        <div class="glass-card rounded-3xl overflow-hidden shadow-sm bg-white border border-slate-200 space-y-4 p-6">
+          <h3 class="font-bold text-slate-900 text-base font-heading flex items-center gap-2">
+            <span>📚</span> รายละเอียดคะแนนการบ้าน
+          </h3>
+          <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse">
+              <thead>
+                <tr class="bg-slate-50 text-slate-700 text-xs font-heading font-bold uppercase tracking-wider border-b border-slate-200">
+                  <th class="p-3.5 whitespace-nowrap">วิชา / หัวข้อการบ้าน</th>
+                  <th class="p-3.5 text-center whitespace-nowrap">กำหนดส่ง</th>
+                  <th class="p-3.5 text-center whitespace-nowrap">คะแนนเต็ม</th>
+                  <th class="p-3.5 text-center whitespace-nowrap">คะแนนที่ได้</th>
+                  <th class="p-3.5 text-center whitespace-nowrap">สถานะ</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-100 text-xs sm:text-sm">
+                ${hwDetails.length === 0 ? `
+                  <tr><td colspan="5" class="text-center py-6 text-slate-400">ยังไม่มีรายการการบ้านในระบบ</td></tr>
+                ` : hwDetails.map(h => `
+                  <tr class="hover:bg-slate-50 transition-colors">
+                    <td class="p-3.5 font-bold text-slate-900">
+                      <div>${h.title}</div>
+                      <div class="text-[11px] text-slate-400 font-normal">${h.subject}</div>
+                    </td>
+                    <td class="p-3.5 text-center text-slate-500 text-xs whitespace-nowrap">${h.dueDate}</td>
+                    <td class="p-3.5 text-center font-mono text-slate-600 whitespace-nowrap">${h.maxPoints}</td>
+                    <td class="p-3.5 text-center font-mono font-bold text-indigo-600 whitespace-nowrap">${h.score}</td>
+                    <td class="p-3.5 text-center whitespace-nowrap">
+                      <span class="px-2.5 py-1 rounded-xl text-xs font-bold border ${h.statusClass}">${h.statusText}</span>
+                    </td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Section 2: Quiz Scores Detail Table -->
+        <div class="glass-card rounded-3xl overflow-hidden shadow-sm bg-white border border-slate-200 space-y-4 p-6">
+          <h3 class="font-bold text-slate-900 text-base font-heading flex items-center gap-2">
+            <span>✨</span> รายละเอียดคะแนนแบบทดสอบ
+          </h3>
+          <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse">
+              <thead>
+                <tr class="bg-slate-50 text-slate-700 text-xs font-heading font-bold uppercase tracking-wider border-b border-slate-200">
+                  <th class="p-3.5 whitespace-nowrap">หัวข้อแบบทดสอบ</th>
+                  <th class="p-3.5 text-center whitespace-nowrap">วิชา</th>
+                  <th class="p-3.5 text-center whitespace-nowrap">คะแนนเต็ม</th>
+                  <th class="p-3.5 text-center whitespace-nowrap">คะแนนที่ได้</th>
+                  <th class="p-3.5 text-center whitespace-nowrap">สถานะ</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-100 text-xs sm:text-sm">
+                ${quizDetails.length === 0 ? `
+                  <tr><td colspan="5" class="text-center py-6 text-slate-400">ยังไม่มีรายการแบบทดสอบในระบบ</td></tr>
+                ` : quizDetails.map(q => `
+                  <tr class="hover:bg-slate-50 transition-colors">
+                    <td class="p-3.5 font-bold text-slate-900">${q.title}</td>
+                    <td class="p-3.5 text-center text-slate-500 text-xs whitespace-nowrap">${q.subject}</td>
+                    <td class="p-3.5 text-center font-mono text-slate-600 whitespace-nowrap">${q.maxPoints}</td>
+                    <td class="p-3.5 text-center font-mono font-bold text-emerald-600 whitespace-nowrap">${q.score}</td>
+                    <td class="p-3.5 text-center whitespace-nowrap">
+                      <span class="px-2.5 py-1 rounded-xl text-xs font-bold border ${q.statusClass}">${q.statusText}</span>
+                    </td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    `;
+
+    // PDF Print Handler for Student
+    containerEl.querySelector('#btn-export-student-pdf')?.addEventListener('click', () => {
+      const headers = ['ประเภท', 'วิชา / หัวข้อ', 'คะแนนเต็ม', 'คะแนนที่ได้', 'สถานะ'];
+      const dataRows = [
+        ...hwDetails.map(h => ['การบ้าน', `${h.subject} - ${h.title}`, String(h.maxPoints), String(h.score), h.statusText]),
+        ...quizDetails.map(q => ['แบบทดสอบ', `${q.subject} - ${q.title}`, String(q.maxPoints), String(q.score), q.statusText]),
+        ['สรุปผลรวม', 'รวมคะแนนทั้งหมดทุกวิชา', String(grandTotalMax), `${grandTotalEarned} (${percentage}%)`, `เกรด ${gradeLetter}`]
+      ];
+
+      printPDFReport(
+        `ใบรายงานผลการเรียนส่วนบุคคล (${stdName})`,
+        `รหัสนักเรียน: ${stdId} | ชั้น/ห้อง: ${currentUser.grade || '-'}/${currentUser.room || '-'} | คะแนนรวม: ${percentage}% (เกรด ${gradeLetter})`,
         headers,
         dataRows
       );

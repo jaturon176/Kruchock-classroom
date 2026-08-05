@@ -358,12 +358,12 @@ export class RBACModule {
           <div class="glass-card relative w-full p-8 md:p-10 rounded-3xl shadow-xl bg-white/95 border border-slate-200/80 space-y-7 backdrop-blur-xl">
             <!-- Header Branding -->
             <div class="text-center space-y-3">
-              <div class="w-16 h-16 rounded-2xl bg-gradient-to-tr from-sky-500 via-indigo-600 to-purple-600 mx-auto flex items-center justify-center text-white text-3xl font-extrabold shadow-lg shadow-indigo-500/25 transition-transform hover:scale-105">
-                ⚡
+              <div class="w-20 h-20 rounded-2xl bg-white border border-slate-200 mx-auto flex items-center justify-center shadow-md p-1 transition-transform hover:scale-105 overflow-hidden">
+                <img src="./logo.jpg" alt="โรงเรียนพรมเทพวิทยาคม" class="w-full h-full object-contain">
               </div>
               <div class="space-y-1">
                 <h2 class="text-2xl sm:text-3xl font-extrabold font-heading text-slate-900 tracking-tight">เข้าสู่ระบบ</h2>
-                <p class="text-xs text-slate-500 font-heading">Krunoii-Classroom Platform (Smart Learning System)</p>
+                <p class="text-xs text-slate-500 font-heading">Kruchock-Classroom Platform</p>
               </div>
             </div>
 
