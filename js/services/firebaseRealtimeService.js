@@ -320,7 +320,7 @@ class FirebaseRealtimeService {
   async batchAddStudents(studentsList) {
     const current = this.getCollection('users');
     studentsList.forEach(st => {
-      const existingIdx = current.findIndex(u => (u.studentId && u.studentId === st.studentId) || (u.username && u.username === st.username));
+      const existingIdx = current.findIndex(u => (u.studentId && st.studentId && u.studentId === st.studentId) || (u.username && st.username && u.username === st.username));
       if (existingIdx !== -1) {
         current[existingIdx] = { ...current[existingIdx], ...st };
       } else {
@@ -330,6 +330,10 @@ class FirebaseRealtimeService {
 
     this.saveCollection('users', current);
     return current;
+  }
+
+  async importStudents(studentsList) {
+    return await this.batchAddStudents(studentsList);
   }
 
   // Batch Delete Students

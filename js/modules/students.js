@@ -744,7 +744,7 @@ export class StudentsModule {
         }
       }
 
-      firebaseService.importStudents(parsedStudents);
+      await firebaseService.importStudents(parsedStudents);
       modalEl.remove();
 
       await showAlertModal({
@@ -841,7 +841,7 @@ export class StudentsModule {
       });
 
       if (confirmed) {
-        const count = firebaseService.batchDeleteStudents(type, val);
+        const count = await firebaseService.batchDeleteStudents(type, val);
         modalEl.remove();
         await showAlertModal({
           title: '🗑️ ลบข้อมูลเรียบร้อย',
