@@ -74,7 +74,7 @@ export class RBACModule {
 
   // Permission Guards
   canManageUsers() {
-    return this.currentUser && this.currentUser.role === 'Admin';
+    return this.currentUser && ['Admin', 'Teacher'].includes(this.currentUser.role);
   }
 
   canManageHomework() {
