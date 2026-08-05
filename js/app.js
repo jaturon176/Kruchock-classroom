@@ -136,8 +136,8 @@ class SchoolApp {
           <!-- Logo & Brand -->
           <div class="flex items-center justify-between w-full md:w-auto">
             <div class="flex items-center gap-3 cursor-pointer group" id="brand-logo">
-              <div class="w-10 h-10 rounded-2xl bg-gradient-to-tr from-sky-500 via-indigo-600 to-purple-600 flex items-center justify-center text-white text-lg font-extrabold shadow-md shadow-sky-500/20 group-hover:scale-105 transition-transform">
-                ⚡
+              <div class="w-11 h-11 rounded-2xl bg-white border border-slate-200 flex items-center justify-center shadow-sm overflow-hidden p-0.5 group-hover:scale-105 transition-transform shrink-0">
+                <img src="./logo.jpg" alt="โรงเรียนพรมเทพวิทยาคม" class="w-full h-full object-contain">
               </div>
               <div>
                 <div class="font-heading font-extrabold text-base tracking-tight text-slate-800">
