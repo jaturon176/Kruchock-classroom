@@ -140,8 +140,8 @@ class SchoolApp {
                 ⚡
               </div>
               <div>
-                <div class="font-heading font-extrabold text-base tracking-tight text-slate-800 flex items-center gap-2">
-                  ${decodeMojibakeThai(settings.schoolName)} <span class="text-[10px] bg-emerald-100 text-emerald-800 border border-emerald-300 px-2 py-0.5 rounded-full font-bold">Central Server Live</span>
+                <div class="font-heading font-extrabold text-base tracking-tight text-slate-800">
+                  ${decodeMojibakeThai(settings.schoolName)}
                 </div>
                 <div class="text-[11px] text-slate-500 font-heading">ระบบบริหารจัดการห้องเรียนอัจฉริยะ (${settings.semester}/${settings.academicYear})</div>
               </div>
