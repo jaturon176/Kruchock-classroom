@@ -1,19 +1,19 @@
 /**
- * Main Application Controller & Router (With Automatic Cache-Busting System v=15.0)
+ * Main Application Controller & Router (With Automatic Cache-Busting System v=16.0)
  * Handles authentication checks, tab navigation, settings rendering,
  * central server 0.1s real-time updates across all devices, and user avatar updates.
  */
 
-import { RBACModule } from './modules/rbac.js?v=15.0';
-import { DashboardModule } from './modules/dashboard.js?v=15.0';
-import { StudentsModule } from './modules/students.js?v=15.0';
-import { HomeworkModule } from './modules/homework.js?v=15.0';
-import { QuizModule } from './modules/quiz.js?v=15.0';
-import { AttendanceModule } from './modules/attendance.js?v=15.0';
-import { GradebookModule } from './modules/gradebook.js?v=15.0';
-import { SettingsModule } from './modules/settings.js?v=15.0';
-import { syncEngine } from './services/syncEngine.js?v=15.0';
-import { decodeMojibakeThai } from './services/mojibakeDecoder.js?v=15.0';
+import { RBACModule } from './modules/rbac.js?v=16.0';
+import { DashboardModule } from './modules/dashboard.js?v=16.0';
+import { StudentsModule } from './modules/students.js?v=16.0';
+import { HomeworkModule } from './modules/homework.js?v=16.0';
+import { QuizModule } from './modules/quiz.js?v=16.0';
+import { AttendanceModule } from './modules/attendance.js?v=16.0';
+import { GradebookModule } from './modules/gradebook.js?v=16.0';
+import { SettingsModule } from './modules/settings.js?v=16.0';
+import { syncEngine } from './services/syncEngine.js?v=16.0';
+import { decodeMojibakeThai } from './services/mojibakeDecoder.js?v=16.0';
 
 class SchoolApp {
   constructor() {

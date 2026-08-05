@@ -114,11 +114,19 @@ export function showAlertModal({
   });
 }
 
-export function showImagePreviewModal({
-  imageUrl = '',
-  title = '🖼️ รูปภาพชิ้นงานของนักเรียน',
-  studentName = ''
-} = {}) {
+export function showImagePreviewModal(options = {}) {
+  let imageUrl = '';
+  let title = '🖼️ รูปภาพชิ้นงานของนักเรียน';
+  let studentName = '';
+
+  if (typeof options === 'string') {
+    imageUrl = options;
+  } else if (options && typeof options === 'object') {
+    imageUrl = options.imageUrl || options.url || options.src || '';
+    if (options.title) title = options.title;
+    if (options.studentName) studentName = options.studentName;
+  }
+
   return new Promise((resolve) => {
     const modalHTML = `
       <div id="custom-image-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-[120] flex items-center justify-center p-4 animate-fade-in">
