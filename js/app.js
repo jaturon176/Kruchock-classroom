@@ -1,19 +1,19 @@
 /**
- * Main Application Controller & Router (With Automatic Cache-Busting System v=11.0)
+ * Main Application Controller & Router (With Automatic Cache-Busting System v=12.0)
  * Handles authentication checks, tab navigation, settings rendering,
  * central server 0.1s real-time updates across all devices, and user avatar updates.
  */
 
-import { RBACModule } from './modules/rbac.js?v=11.0';
-import { DashboardModule } from './modules/dashboard.js?v=11.0';
-import { StudentsModule } from './modules/students.js?v=11.0';
-import { HomeworkModule } from './modules/homework.js?v=11.0';
-import { QuizModule } from './modules/quiz.js?v=11.0';
-import { AttendanceModule } from './modules/attendance.js?v=11.0';
-import { GradebookModule } from './modules/gradebook.js?v=11.0';
-import { SettingsModule } from './modules/settings.js?v=11.0';
-import { syncEngine } from './services/syncEngine.js?v=11.0';
-import { decodeMojibakeThai } from './services/mojibakeDecoder.js?v=11.0';
+import { RBACModule } from './modules/rbac.js?v=12.0';
+import { DashboardModule } from './modules/dashboard.js?v=12.0';
+import { StudentsModule } from './modules/students.js?v=12.0';
+import { HomeworkModule } from './modules/homework.js?v=12.0';
+import { QuizModule } from './modules/quiz.js?v=12.0';
+import { AttendanceModule } from './modules/attendance.js?v=12.0';
+import { GradebookModule } from './modules/gradebook.js?v=12.0';
+import { SettingsModule } from './modules/settings.js?v=12.0';
+import { syncEngine } from './services/syncEngine.js?v=12.0';
+import { decodeMojibakeThai } from './services/mojibakeDecoder.js?v=12.0';
 
 class SchoolApp {
   constructor() {
@@ -137,7 +137,7 @@ class SchoolApp {
           <div class="flex items-center justify-between w-full md:w-auto shrink-0">
             <div class="flex items-center gap-2.5 cursor-pointer group shrink-0" id="brand-logo">
               <div class="w-10 h-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center shadow-sm overflow-hidden p-0.5 group-hover:scale-105 transition-transform shrink-0">
-                <img src="./logo.jpg" alt="โรงเรียนพรมเทพวิทยาคม" class="w-full h-full object-contain">
+                <img src="./logo.jpg" alt="โรงเรียนพรมเทพพิทยาคม" class="w-full h-full object-contain">
               </div>
               <div class="shrink-0">
                 <div class="font-heading font-extrabold text-base tracking-tight text-slate-800 whitespace-nowrap">

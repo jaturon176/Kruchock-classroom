@@ -29,9 +29,11 @@ export class SettingsModule {
 
   initSettings() {
     const raw = localStorage.getItem('antigravity_school_settings');
+    const defaultSchoolName = 'โรงเรียนพรมเทพพิทยาคม';
+
     if (!raw) {
       this.settings = {
-        schoolName: 'โรงเรียนพนมดงรักวิทยา',
+        schoolName: defaultSchoolName,
         academicYear: '2026',
         semester: 'ภาคเรียนที่ 1',
         theme: 'ocean',
@@ -45,7 +47,7 @@ export class SettingsModule {
     } else {
       try {
         this.settings = {
-          schoolName: 'โรงเรียนพนมดงรักวิทยา',
+          schoolName: defaultSchoolName,
           academicYear: '2026',
           semester: 'ภาคเรียนที่ 1',
           theme: 'ocean',
@@ -56,9 +58,14 @@ export class SettingsModule {
           allowStudentAvatar: true,
           ...JSON.parse(raw)
         };
+        // Auto update old default schoolName if it was "โรงเรียนพนมดงรักวิทยา"
+        if (!this.settings.schoolName || this.settings.schoolName === 'โรงเรียนพนมดงรักวิทยา' || this.settings.schoolName === 'โรงเรียนพรมเทพวิทยาคม') {
+          this.settings.schoolName = defaultSchoolName;
+          this.saveSettings();
+        }
       } catch (e) {
         this.settings = {
-          schoolName: 'โรงเรียนพนมดงรักวิทยา',
+          schoolName: defaultSchoolName,
           academicYear: '2026',
           semester: 'ภาคเรียนที่ 1',
           theme: 'ocean',
@@ -68,6 +75,7 @@ export class SettingsModule {
           pageSize: 10,
           allowStudentAvatar: true
         };
+        this.saveSettings();
       }
     }
     this.applyTheme();

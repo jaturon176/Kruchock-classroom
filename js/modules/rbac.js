@@ -359,7 +359,7 @@ export class RBACModule {
             <!-- Header Branding -->
             <div class="text-center space-y-3">
               <div class="w-20 h-20 rounded-2xl bg-white border border-slate-200 mx-auto flex items-center justify-center shadow-md p-1 transition-transform hover:scale-105 overflow-hidden">
-                <img src="./logo.jpg" alt="โรงเรียนพรมเทพวิทยาคม" class="w-full h-full object-contain">
+                <img src="./logo.jpg" alt="โรงเรียนพรมเทพพิทยาคม" class="w-full h-full object-contain">
               </div>
               <div class="space-y-1">
                 <h2 class="text-2xl sm:text-3xl font-extrabold font-heading text-slate-900 tracking-tight">เข้าสู่ระบบ</h2>
