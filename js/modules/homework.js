@@ -33,6 +33,17 @@ export function getHwImages(hw) {
   return [];
 }
 
+export function getHwYoutubeUrls(hw) {
+  if (!hw) return [];
+  if (hw.youtubeUrls && Array.isArray(hw.youtubeUrls) && hw.youtubeUrls.length > 0) {
+    return hw.youtubeUrls.filter(url => url && parseYouTubeEmbedUrl(url));
+  }
+  if (hw.youtubeUrl && parseYouTubeEmbedUrl(hw.youtubeUrl)) {
+    return [hw.youtubeUrl];
+  }
+  return [];
+}
+
 export class HomeworkModule {
   constructor(rbac) {
     this.rbac = rbac;
@@ -248,14 +259,14 @@ export class HomeworkModule {
 
                 <p class="text-slate-700 text-sm leading-relaxed whitespace-pre-line">${decodeMojibakeThai(hw.detail)}</p>
 
-                <!-- Attached Media (Images & YouTube Video) -->
+                <!-- Attached Media (Images & YouTube Videos) -->
                 ${(() => {
                   const hwImages = getHwImages(hw);
-                  const hasYt = hw.youtubeUrl && parseYouTubeEmbedUrl(hw.youtubeUrl);
-                  if (hwImages.length === 0 && !hasYt) return '';
+                  const ytUrls = getHwYoutubeUrls(hw);
+                  if (hwImages.length === 0 && ytUrls.length === 0) return '';
 
                   return `
-                    <div class="mt-3 p-3.5 bg-slate-50/80 rounded-2xl border border-slate-200/80 space-y-3">
+                    <div class="mt-3 p-3.5 bg-slate-50/80 rounded-2xl border border-slate-200/80 space-y-4">
                       ${hwImages.length > 0 ? `
                         <div>
                           <div class="text-xs font-bold text-slate-700 mb-1.5 flex items-center justify-between">
@@ -275,13 +286,20 @@ export class HomeworkModule {
                         </div>
                       ` : ''}
 
-                      ${hasYt ? `
+                      ${ytUrls.length > 0 ? `
                         <div>
-                          <div class="text-xs font-bold text-slate-700 mb-1.5 flex items-center gap-1.5">
-                            <span>🎥</span> วิดีโอประกอบการเรียนรู้ (YouTube):
+                          <div class="text-xs font-bold text-slate-700 mb-2 flex items-center gap-1.5">
+                            <span>🎥</span> วิดีโอประกอบการเรียนรู้ (${ytUrls.length} วิดีโอ):
                           </div>
-                          <div class="max-w-2xl rounded-xl overflow-hidden border border-slate-200 shadow-xs aspect-video bg-black">
-                            <iframe src="${parseYouTubeEmbedUrl(hw.youtubeUrl)}" class="w-full h-full border-0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+                          <div class="${ytUrls.length === 1 ? 'max-w-2xl' : 'grid grid-cols-1 md:grid-cols-2'} gap-3">
+                            ${ytUrls.map((url, i) => `
+                              <div class="space-y-1">
+                                ${ytUrls.length > 1 ? `<div class="text-[11px] font-bold text-rose-800">🎬 วิดีโอที่ ${i + 1}</div>` : ''}
+                                <div class="rounded-xl overflow-hidden border border-slate-200 shadow-xs aspect-video bg-black">
+                                  <iframe src="${parseYouTubeEmbedUrl(url)}" class="w-full h-full border-0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+                                </div>
+                              </div>
+                            `).join('')}
                           </div>
                         </div>
                       ` : ''}
@@ -568,6 +586,12 @@ export class HomeworkModule {
           : (targetHw.attachmentImage ? [targetHw.attachmentImage] : []))
       : [];
 
+    let uploadedHwYtUrls = isEdit
+      ? (targetHw.youtubeUrls && Array.isArray(targetHw.youtubeUrls) && targetHw.youtubeUrls.length > 0
+          ? [...targetHw.youtubeUrls]
+          : (targetHw.youtubeUrl ? [targetHw.youtubeUrl] : ['']))
+      : [''];
+
     let availableCourses = allCourses;
     if (currentUser.role === 'Teacher') {
       availableCourses = allCourses.filter(c => decodeMojibakeThai(c.teacher) === decodeMojibakeThai(currentUser.name));
@@ -672,16 +696,19 @@ export class HomeworkModule {
               </div>
             </div>
 
-            <!-- Media Attachment 2: YouTube Video URL -->
-            <div class="p-4 bg-rose-50/60 border border-rose-100 rounded-2xl space-y-2">
-              <label class="block text-xs font-bold text-rose-900 flex items-center gap-1.5">
-                <span>🎥</span> แนบลิงก์วิดีโอประกอบการเรียนรู้ (YouTube URL)
-              </label>
-              <input type="url" id="hw-youtube-url" class="input-field py-2 text-xs" value="${isEdit ? (targetHw.youtubeUrl || '') : ''}" placeholder="วางลิงก์วิดีโอ YouTube เช่น https://www.youtube.com/watch?v=... หรือ https://youtu.be/...">
-              
-              <!-- Live YouTube Embed Preview -->
-              <div id="hw-yt-preview-box" class="${isEdit && targetHw.youtubeUrl && parseYouTubeEmbedUrl(targetHw.youtubeUrl) ? '' : 'hidden'} mt-2 rounded-xl overflow-hidden border border-rose-200 aspect-video bg-black">
-                <iframe id="hw-yt-preview" src="${isEdit && targetHw.youtubeUrl ? (parseYouTubeEmbedUrl(targetHw.youtubeUrl) || '') : ''}" class="w-full h-full border-0" allowfullscreen></iframe>
+            <!-- Media Attachment 2: Multi-YouTube Video Links Manager -->
+            <div class="p-4 bg-rose-50/60 border border-rose-100 rounded-2xl space-y-3">
+              <div class="flex items-center justify-between">
+                <label class="block text-xs font-bold text-rose-900 flex items-center gap-1.5">
+                  <span>🎥</span> แนบลิงก์วิดีโอประกอบการเรียนรู้ (YouTube Links)
+                </label>
+                <button type="button" id="btn-add-yt-row" class="text-xs font-bold text-rose-700 hover:text-rose-900 bg-white hover:bg-rose-100 px-3 py-1 rounded-xl border border-rose-200 shadow-xs flex items-center gap-1 transition-all">
+                  <span>➕</span> เพิ่มวิดีโออีกรายการ
+                </button>
+              </div>
+
+              <div id="hw-yt-rows-container" class="space-y-3">
+                <!-- Dynamic YouTube Input Rows populated by JS -->
               </div>
             </div>
 
@@ -809,20 +836,80 @@ export class HomeworkModule {
       }
     });
 
-    // YouTube Live Preview Handler
-    const ytInput = modalEl.querySelector('#hw-youtube-url');
-    const ytBox = modalEl.querySelector('#hw-yt-preview-box');
-    const ytIframe = modalEl.querySelector('#hw-yt-preview');
+    // Multi-YouTube Rows Dynamic Manager Handlers
+    const updateYtRows = () => {
+      const ytContainer = modalEl.querySelector('#hw-yt-rows-container');
 
-    ytInput.addEventListener('input', (e) => {
-      const embedUrl = parseYouTubeEmbedUrl(e.target.value);
-      if (embedUrl) {
-        ytIframe.src = embedUrl;
-        ytBox.classList.remove('hidden');
-      } else {
-        ytIframe.src = '';
-        ytBox.classList.add('hidden');
+      if (uploadedHwYtUrls.length === 0) {
+        uploadedHwYtUrls.push('');
       }
+
+      ytContainer.innerHTML = uploadedHwYtUrls.map((url, idx) => {
+        const embedUrl = parseYouTubeEmbedUrl(url);
+        return `
+          <div class="p-3 bg-white rounded-xl border border-rose-100 space-y-2 shadow-xs relative" data-yt-row-idx="${idx}">
+            <div class="flex items-center justify-between gap-2">
+              <label class="text-[11px] font-bold text-rose-800 flex items-center gap-1">
+                <span>🎬</span> วิดีโอรายการที่ ${idx + 1}
+              </label>
+              ${uploadedHwYtUrls.length > 1 ? `
+                <button type="button" data-del-yt-idx="${idx}" class="text-rose-600 hover:text-rose-800 text-xs font-bold px-2 py-0.5 hover:bg-rose-50 rounded-lg transition-colors flex items-center gap-1" title="ลบวิดีโอนี้ออก">
+                  <span>🗑️</span> ลบออก
+                </button>
+              ` : ''}
+            </div>
+
+            <input 
+              type="url" 
+              data-yt-input-idx="${idx}" 
+              class="input-field py-2 text-xs bg-slate-50/70 focus:bg-white" 
+              value="${url}" 
+              placeholder="วางลิงก์ YouTube เช่น https://www.youtube.com/watch?v=... หรือ https://youtu.be/..."
+            >
+
+            <!-- Live Embed Preview for this Row -->
+            <div class="${embedUrl ? '' : 'hidden'} mt-2 rounded-xl overflow-hidden border border-rose-200 aspect-video bg-black shadow-xs">
+              <iframe src="${embedUrl || ''}" class="w-full h-full border-0" allowfullscreen></iframe>
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      ytContainer.querySelectorAll('[data-yt-input-idx]').forEach(input => {
+        input.addEventListener('input', (e) => {
+          const idx = parseInt(e.currentTarget.dataset.ytInputIdx, 10);
+          uploadedHwYtUrls[idx] = e.target.value.trim();
+          const rowEl = ytContainer.querySelector(`[data-yt-row-idx="${idx}"]`);
+          const iframeBox = rowEl ? rowEl.querySelector('.aspect-video') : null;
+          const iframe = rowEl ? rowEl.querySelector('iframe') : null;
+          const embed = parseYouTubeEmbedUrl(e.target.value.trim());
+
+          if (embed && iframeBox && iframe) {
+            iframe.src = embed;
+            iframeBox.classList.remove('hidden');
+          } else if (iframeBox && iframe) {
+            iframe.src = '';
+            iframeBox.classList.add('hidden');
+          }
+        });
+      });
+
+      ytContainer.querySelectorAll('[data-del-yt-idx]').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          const idx = parseInt(e.currentTarget.dataset.delYtIdx, 10);
+          uploadedHwYtUrls.splice(idx, 1);
+          updateYtRows();
+        });
+      });
+    };
+
+    updateYtRows();
+
+    modalEl.querySelector('#btn-add-yt-row')?.addEventListener('click', () => {
+      uploadedHwYtUrls.push('');
+      updateYtRows();
+      const lastInput = modalEl.querySelector(`[data-yt-input-idx="${uploadedHwYtUrls.length - 1}"]`);
+      if (lastInput) lastInput.focus();
     });
 
     modalEl.querySelectorAll('#close-hw-modal, #close-hw-btn').forEach(b => b.addEventListener('click', () => modalEl.remove()));
@@ -836,6 +923,8 @@ export class HomeworkModule {
       let selectedRooms = Array.from(checkboxes).map(cb => cb.value);
       if (selectedRooms.length === 0) selectedRooms = ['All'];
 
+      const validYtUrls = uploadedHwYtUrls.map(u => u.trim()).filter(u => u && parseYouTubeEmbedUrl(u));
+
       if (isEdit) {
         const updates = {
           courseId: courseId,
@@ -848,7 +937,8 @@ export class HomeworkModule {
           targetRooms: selectedRooms,
           attachmentImages: [...uploadedHwImages],
           attachmentImage: uploadedHwImages.length > 0 ? uploadedHwImages[0] : '',
-          youtubeUrl: document.getElementById('hw-youtube-url').value.trim()
+          youtubeUrls: validYtUrls,
+          youtubeUrl: validYtUrls.length > 0 ? validYtUrls[0] : ''
         };
         firebaseService.updateItem('homework', targetHw.id, updates);
       } else {
@@ -863,7 +953,8 @@ export class HomeworkModule {
           targetRooms: selectedRooms,
           attachmentImages: [...uploadedHwImages],
           attachmentImage: uploadedHwImages.length > 0 ? uploadedHwImages[0] : '',
-          youtubeUrl: document.getElementById('hw-youtube-url').value.trim(),
+          youtubeUrls: validYtUrls,
+          youtubeUrl: validYtUrls.length > 0 ? validYtUrls[0] : '',
           submissions: []
         };
         firebaseService.addItem('homework', payload);
@@ -929,16 +1020,27 @@ export class HomeworkModule {
                   `;
                 })()}
 
-                ${hw.youtubeUrl && parseYouTubeEmbedUrl(hw.youtubeUrl) ? `
-                  <div class="pt-2.5 border-t border-indigo-100/70">
-                    <div class="text-xs font-bold text-slate-800 mb-1 flex items-center gap-1">
-                      <span>🎥</span> วิดีโอประกอบการเรียนรู้ (YouTube):
+                ${(() => {
+                  const subYtUrls = getHwYoutubeUrls(hw);
+                  if (subYtUrls.length === 0) return '';
+                  return `
+                    <div class="pt-2.5 border-t border-indigo-100/70">
+                      <div class="text-xs font-bold text-slate-800 mb-1.5 flex items-center gap-1">
+                        <span>🎥</span> วิดีโอประกอบการเรียนรู้ (${subYtUrls.length} วิดีโอ):
+                      </div>
+                      <div class="space-y-2.5">
+                        ${subYtUrls.map((url, i) => `
+                          <div class="space-y-1">
+                            ${subYtUrls.length > 1 ? `<div class="text-[11px] font-bold text-rose-800">🎬 วิดีโอที่ ${i + 1}</div>` : ''}
+                            <div class="w-full rounded-xl overflow-hidden border border-slate-200 shadow-xs aspect-video bg-black">
+                              <iframe src="${parseYouTubeEmbedUrl(url)}" class="w-full h-full border-0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+                            </div>
+                          </div>
+                        `).join('')}
+                      </div>
                     </div>
-                    <div class="w-full rounded-xl overflow-hidden border border-slate-200 shadow-xs aspect-video bg-black">
-                      <iframe src="${parseYouTubeEmbedUrl(hw.youtubeUrl)}" class="w-full h-full border-0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
-                    </div>
-                  </div>
-                ` : ''}
+                  `;
+                })()}
               </div>
             </div>
           </div>
