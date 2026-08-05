@@ -12,6 +12,16 @@ import { decodeMojibakeThai } from '../services/mojibakeDecoder.js';
 import { showConfirmModal, showAlertModal, showImagePreviewModal } from '../services/dialogService.js';
 import { uploadImageToCloudinary } from '../services/cloudinaryService.js';
 
+export function parseYouTubeEmbedUrl(url) {
+  if (!url || typeof url !== 'string') return null;
+  const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+  const match = url.trim().match(regExp);
+  if (match && match[2] && match[2].length === 11) {
+    return `https://www.youtube-nocookie.com/embed/${match[2]}`;
+  }
+  return null;
+}
+
 export class HomeworkModule {
   constructor(rbac) {
     this.rbac = rbac;
@@ -225,7 +235,34 @@ export class HomeworkModule {
                   </div>
                 </div>
 
-                <p class="text-slate-700 text-sm leading-relaxed">${decodeMojibakeThai(hw.detail)}</p>
+                <p class="text-slate-700 text-sm leading-relaxed whitespace-pre-line">${decodeMojibakeThai(hw.detail)}</p>
+
+                <!-- Attached Media (Image & YouTube Video) -->
+                ${hw.attachmentImage || (hw.youtubeUrl && parseYouTubeEmbedUrl(hw.youtubeUrl)) ? `
+                  <div class="mt-3 p-3.5 bg-slate-50/80 rounded-2xl border border-slate-200/80 space-y-3">
+                    ${hw.attachmentImage ? `
+                      <div>
+                        <div class="text-xs font-bold text-slate-700 mb-1.5 flex items-center gap-1.5">
+                          <span>🖼️</span> ภาพประกอบโจทย์:
+                        </div>
+                        <div class="max-w-md max-h-64 rounded-xl overflow-hidden border border-slate-200 shadow-xs cursor-pointer hover:opacity-95 transition-opacity bg-white" data-preview-img="${hw.attachmentImage}">
+                          <img src="${hw.attachmentImage}" class="w-full h-auto max-h-64 object-contain mx-auto">
+                        </div>
+                      </div>
+                    ` : ''}
+
+                    ${hw.youtubeUrl && parseYouTubeEmbedUrl(hw.youtubeUrl) ? `
+                      <div>
+                        <div class="text-xs font-bold text-slate-700 mb-1.5 flex items-center gap-1.5">
+                          <span>🎥</span> วิดีโอประกอบการเรียนรู้ (YouTube):
+                        </div>
+                        <div class="max-w-2xl rounded-xl overflow-hidden border border-slate-200 shadow-xs aspect-video bg-black">
+                          <iframe src="${parseYouTubeEmbedUrl(hw.youtubeUrl)}" class="w-full h-full border-0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+                        </div>
+                      </div>
+                    ` : ''}
+                  </div>
+                ` : ''}
 
                 <!-- Actions / Status Area -->
                 <div class="pt-3 flex flex-wrap justify-between items-center gap-4 border-t border-slate-100">
@@ -266,6 +303,13 @@ export class HomeworkModule {
     `;
 
     // Bindings
+    containerEl.querySelectorAll('[data-preview-img]').forEach(el => {
+      el.addEventListener('click', (e) => {
+        const src = e.currentTarget.dataset.previewImg;
+        if (src) showImagePreviewModal(src);
+      });
+    });
+
     containerEl.querySelectorAll('.course-card').forEach(card => {
       card.addEventListener('click', (e) => {
         if (e.target.closest('[data-edit-course]') || e.target.closest('[data-del-course]')) return;
@@ -493,6 +537,8 @@ export class HomeworkModule {
     const users = firebaseService.getCollection('users');
     const currentUser = this.rbac.getCurrentUser();
 
+    let uploadedHwImageUrl = isEdit ? (targetHw.attachmentImage || '') : '';
+
     let availableCourses = allCourses;
     if (currentUser.role === 'Teacher') {
       availableCourses = allCourses.filter(c => decodeMojibakeThai(c.teacher) === decodeMojibakeThai(currentUser.name));
@@ -567,6 +613,45 @@ export class HomeworkModule {
               <textarea id="hw-detail" rows="4" required class="input-field" placeholder="ระบุรายละเอียดโจทย์ขั้นตอนการทำ...">${isEdit ? decodeMojibakeThai(targetHw.detail) : ''}</textarea>
             </div>
 
+            <!-- Media Attachment 1: Image Upload (Cloudinary CDN) -->
+            <div class="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-3">
+              <label class="block text-xs font-bold text-slate-800">🖼️ แนบภาพประกอบโจทย์ (Cloudinary CDN)</label>
+              
+              <input type="file" id="hw-img-input" accept="image/*" class="hidden">
+              <div id="hw-img-dropzone" class="border-2 border-dashed border-indigo-200 hover:border-indigo-500 bg-white hover:bg-indigo-50/50 p-4 rounded-xl text-center cursor-pointer transition-all">
+                <div class="text-2xl mb-1">📸</div>
+                <div id="hw-img-text" class="text-xs font-bold text-indigo-900">
+                  คลิกเพื่อเลือกไฟล์รูปภาพประกอบโจทย์
+                </div>
+                <div id="hw-img-status" class="text-[11px] text-slate-500 mt-0.5">
+                  รองรับไฟล์ภาพ JPG, PNG (อัปโหลดขึ้น Cloudinary CDN ความละเอียดสูง)
+                </div>
+              </div>
+
+              <!-- Compressed & CDN Image Live Preview Container -->
+              <div id="hw-img-preview-box" class="${uploadedHwImageUrl ? '' : 'hidden'} p-2.5 bg-white rounded-xl border border-slate-200 text-center relative">
+                <div class="max-h-40 rounded-lg overflow-hidden shadow-xs inline-block border border-slate-200">
+                  <img id="hw-img-preview" src="${uploadedHwImageUrl}" class="max-h-40 w-auto object-contain">
+                </div>
+                <button type="button" id="btn-remove-hw-img" class="mt-1.5 text-rose-600 hover:text-rose-800 text-xs font-bold block mx-auto underline">
+                  🗑️ ลบรูปภาพที่แนบ
+                </button>
+              </div>
+            </div>
+
+            <!-- Media Attachment 2: YouTube Video URL -->
+            <div class="p-4 bg-rose-50/60 border border-rose-100 rounded-2xl space-y-2">
+              <label class="block text-xs font-bold text-rose-900 flex items-center gap-1.5">
+                <span>🎥</span> แนบลิงก์วิดีโอประกอบการเรียนรู้ (YouTube URL)
+              </label>
+              <input type="url" id="hw-youtube-url" class="input-field py-2 text-xs" value="${isEdit ? (targetHw.youtubeUrl || '') : ''}" placeholder="วางลิงก์วิดีโอ YouTube เช่น https://www.youtube.com/watch?v=... หรือ https://youtu.be/...">
+              
+              <!-- Live YouTube Embed Preview -->
+              <div id="hw-yt-preview-box" class="${isEdit && targetHw.youtubeUrl && parseYouTubeEmbedUrl(targetHw.youtubeUrl) ? '' : 'hidden'} mt-2 rounded-xl overflow-hidden border border-rose-200 aspect-video bg-black">
+                <iframe id="hw-yt-preview" src="${isEdit && targetHw.youtubeUrl ? (parseYouTubeEmbedUrl(targetHw.youtubeUrl) || '') : ''}" class="w-full h-full border-0" allowfullscreen></iframe>
+              </div>
+            </div>
+
             <div class="grid grid-cols-2 gap-4">
               <div>
                 <label class="block text-xs font-semibold text-slate-600 mb-1">กำหนดส่ง</label>
@@ -616,6 +701,56 @@ export class HomeworkModule {
     updateRoomChecklist();
     gradeSelect.addEventListener('change', updateRoomChecklist);
 
+    // Image Upload Dropzone Handlers
+    const imgInput = modalEl.querySelector('#hw-img-input');
+    const dropzone = modalEl.querySelector('#hw-img-dropzone');
+    const imgStatus = modalEl.querySelector('#hw-img-status');
+    const imgPreviewBox = modalEl.querySelector('#hw-img-preview-box');
+    const imgPreviewImg = modalEl.querySelector('#hw-img-preview');
+    const removeImgBtn = modalEl.querySelector('#btn-remove-hw-img');
+
+    dropzone.addEventListener('click', () => imgInput.click());
+
+    imgInput.addEventListener('change', async (e) => {
+      if (e.target.files.length > 0) {
+        const file = e.target.files[0];
+        imgStatus.innerHTML = `⏳ กำลังอัปโหลดภาพ <strong>${file.name}</strong> ขึ้น CDN...`;
+        try {
+          uploadedHwImageUrl = await uploadImageToCloudinary(file, 1200, 0.8);
+          imgPreviewImg.src = uploadedHwImageUrl;
+          imgPreviewBox.classList.remove('hidden');
+          imgStatus.innerHTML = `✅ อัปโหลดรูปภาพแนบการบ้านสำเร็จ!`;
+        } catch (err) {
+          showAlertModal({ title: '⚠️ เกิดข้อผิดพลาด', message: 'ไม่สามารถอัปโหลดไฟล์รูปภาพที่เลือกได้' });
+          imgStatus.innerHTML = `❌ เกิดข้อผิดพลาดในการอัปโหลดรูปภาพ`;
+        }
+      }
+    });
+
+    removeImgBtn.addEventListener('click', () => {
+      uploadedHwImageUrl = '';
+      imgInput.value = '';
+      imgPreviewImg.src = '';
+      imgPreviewBox.classList.add('hidden');
+      imgStatus.innerHTML = `รองรับไฟล์ภาพ JPG, PNG (อัปโหลดขึ้น Cloudinary CDN ความละเอียดสูง)`;
+    });
+
+    // YouTube Live Preview Handler
+    const ytInput = modalEl.querySelector('#hw-youtube-url');
+    const ytBox = modalEl.querySelector('#hw-yt-preview-box');
+    const ytIframe = modalEl.querySelector('#hw-yt-preview');
+
+    ytInput.addEventListener('input', (e) => {
+      const embedUrl = parseYouTubeEmbedUrl(e.target.value);
+      if (embedUrl) {
+        ytIframe.src = embedUrl;
+        ytBox.classList.remove('hidden');
+      } else {
+        ytIframe.src = '';
+        ytBox.classList.add('hidden');
+      }
+    });
+
     modalEl.querySelectorAll('#close-hw-modal, #close-hw-btn').forEach(b => b.addEventListener('click', () => modalEl.remove()));
 
     modalEl.querySelector('#hw-form').addEventListener('submit', (e) => {
@@ -636,7 +771,9 @@ export class HomeworkModule {
           dueDate: document.getElementById('hw-date').value,
           maxPoints: parseInt(document.getElementById('hw-pts').value, 10),
           targetGrade: document.getElementById('hw-target-grade').value,
-          targetRooms: selectedRooms
+          targetRooms: selectedRooms,
+          attachmentImage: uploadedHwImageUrl,
+          youtubeUrl: document.getElementById('hw-youtube-url').value.trim()
         };
         firebaseService.updateItem('homework', targetHw.id, updates);
       } else {
@@ -649,6 +786,8 @@ export class HomeworkModule {
           maxPoints: parseInt(document.getElementById('hw-pts').value, 10),
           targetGrade: document.getElementById('hw-target-grade').value,
           targetRooms: selectedRooms,
+          attachmentImage: uploadedHwImageUrl,
+          youtubeUrl: document.getElementById('hw-youtube-url').value.trim(),
           submissions: []
         };
         firebaseService.addItem('homework', payload);
@@ -688,8 +827,30 @@ export class HomeworkModule {
               <h4 class="font-extrabold text-slate-900 font-heading text-sm flex items-center gap-1.5">
                 <span>📌 โจทย์/หัวข้อการบ้าน:</span> ${decodeMojibakeThai(hw.title)}
               </h4>
-              <div class="text-xs text-slate-700 leading-relaxed mt-1.5 whitespace-pre-line bg-white/90 p-3 rounded-xl border border-indigo-100 shadow-sm">
-                ${decodeMojibakeThai(hw.detail || 'ไม่มีรายละเอียดเพิ่มเติม')}
+              <div class="text-xs text-slate-700 leading-relaxed mt-1.5 whitespace-pre-line bg-white/90 p-3 rounded-xl border border-indigo-100 shadow-sm space-y-3">
+                <div>${decodeMojibakeThai(hw.detail || 'ไม่มีรายละเอียดเพิ่มเติม')}</div>
+
+                ${hw.attachmentImage ? `
+                  <div class="pt-2.5 border-t border-indigo-100/70">
+                    <div class="text-xs font-bold text-slate-800 mb-1 flex items-center gap-1">
+                      <span>🖼️</span> ภาพประกอบโจทย์:
+                    </div>
+                    <div class="rounded-xl overflow-hidden border border-slate-200 shadow-xs cursor-pointer bg-slate-50" data-preview-img="${hw.attachmentImage}">
+                      <img src="${hw.attachmentImage}" class="max-h-56 w-auto object-contain mx-auto">
+                    </div>
+                  </div>
+                ` : ''}
+
+                ${hw.youtubeUrl && parseYouTubeEmbedUrl(hw.youtubeUrl) ? `
+                  <div class="pt-2.5 border-t border-indigo-100/70">
+                    <div class="text-xs font-bold text-slate-800 mb-1 flex items-center gap-1">
+                      <span>🎥</span> วิดีโอประกอบการเรียนรู้ (YouTube):
+                    </div>
+                    <div class="w-full rounded-xl overflow-hidden border border-slate-200 shadow-xs aspect-video bg-black">
+                      <iframe src="${parseYouTubeEmbedUrl(hw.youtubeUrl)}" class="w-full h-full border-0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+                    </div>
+                  </div>
+                ` : ''}
               </div>
             </div>
           </div>
