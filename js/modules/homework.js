@@ -1168,13 +1168,8 @@ export class HomeworkModule {
     let currentFilterStatus = 'ALL'; // 'ALL' | 'Pending' | 'Graded'
     let currentSearchText = '';
 
-    // Expanded Accordion State Set (Default: expand pending items or first item)
+    // Expanded Accordion State Set (Default: COLLAPSED ALL)
     const expandedStudentIds = new Set();
-    initialSubs.forEach((s, idx) => {
-      if (s.status !== 'Graded' || idx === 0) {
-        expandedStudentIds.add(s.studentId);
-      }
-    });
 
     const modalHTML = `
       <div id="grade-modal" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in font-sarabun">
