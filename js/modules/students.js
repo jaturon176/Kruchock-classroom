@@ -14,6 +14,24 @@ import { firebaseService } from '../services/firebaseService.js?v=3.1';
 import { decodeMojibakeThai } from '../services/mojibakeDecoder.js?v=3.1';
 import { showConfirmModal, showAlertModal } from '../services/dialogService.js?v=3.1';
 
+export function sortGrades(gradesList) {
+  return [...gradesList].sort((a, b) => {
+    const numA = parseInt((a || '').replace(/\D/g, ''), 10) || 99;
+    const numB = parseInt((b || '').replace(/\D/g, ''), 10) || 99;
+    if (numA !== numB) return numA - numB;
+    return (a || '').localeCompare(b || '', 'th');
+  });
+}
+
+export function sortRooms(roomsList) {
+  return [...roomsList].sort((a, b) => {
+    const numA = parseInt((a || '').replace(/\D/g, ''), 10) || 99;
+    const numB = parseInt((b || '').replace(/\D/g, ''), 10) || 99;
+    if (numA !== numB) return numA - numB;
+    return (a || '').localeCompare(b || '', 'th');
+  });
+}
+
 export class StudentsModule {
   constructor(rbac) {
     this.rbac = rbac;
@@ -29,9 +47,21 @@ export class StudentsModule {
     const users = firebaseService.getCollection('users');
     const students = users.filter(u => u.role === 'Student');
 
-    // Extract unique grades and rooms
-    const grades = ['All', ...new Set(students.map(s => s.grade).filter(g => g && g !== '-'))];
-    const rooms = ['All', ...new Set(students.map(s => s.room).filter(r => r && r !== '-'))];
+    // Extract unique grades and sort 1-6 naturally (ม.1, ม.2, ม.3, ม.4, ม.5, ม.6)
+    const rawGrades = [...new Set(students.map(s => s.grade).filter(g => g && g !== '-'))];
+    const grades = ['All', ...sortGrades(rawGrades)];
+
+    // Dynamic Room List based on Selected Grade from existing system data
+    let filteredForRooms = students;
+    if (this.selectedGrade !== 'All') {
+      filteredForRooms = students.filter(s => s.grade === this.selectedGrade);
+    }
+    const rawRooms = [...new Set(filteredForRooms.map(s => s.room).filter(r => r && r !== '-'))];
+    const rooms = ['All', ...sortRooms(rawRooms)];
+
+    if (this.selectedRoom !== 'All' && !rooms.includes(this.selectedRoom)) {
+      this.selectedRoom = 'All';
+    }
 
     // Filter students by grade, room, and live search query
     const filtered = students.filter(s => {

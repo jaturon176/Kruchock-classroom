@@ -9,6 +9,7 @@
 import { firebaseService } from '../services/firebaseService.js';
 import { decodeMojibakeThai } from '../services/mojibakeDecoder.js';
 import { showAlertModal, showConfirmModal } from '../services/dialogService.js';
+import { sortGrades, sortRooms } from './students.js';
 
 export const PERIOD_OPTIONS = [
   'คาบที่ 1 (08:40 - 09:30)',
@@ -53,22 +54,24 @@ export class AttendanceModule {
       this.selectedPeriods = [PERIOD_OPTIONS[0]];
     }
 
-    // 1. Dynamic Grade List from System Users DB
+    // 1. Dynamic Grade List from System Users DB (Sorted 1-6 naturally)
     const studentUsers = users.filter(u => u.role === 'Student');
-    const availableGrades = [...new Set(studentUsers.map(s => s.grade).filter(g => g && g !== '-'))].sort();
-    if (availableGrades.length === 0) availableGrades.push('ม.1', 'ม.2', 'ม.3');
+    const rawGrades = [...new Set(studentUsers.map(s => s.grade).filter(g => g && g !== '-'))];
+    const availableGrades = sortGrades(rawGrades);
+    if (availableGrades.length === 0) availableGrades.push('ม.1', 'ม.2', 'ม.3', 'ม.4', 'ม.5', 'ม.6');
 
     if (this.selectedGrade !== 'All' && !availableGrades.includes(this.selectedGrade)) {
       this.selectedGrade = availableGrades[0] || 'ม.1';
     }
 
-    // 2. Dynamic Room List based on Selected Grade
+    // 2. Dynamic Room List based on Selected Grade (Sorted naturally)
     const getRoomsForGrade = (targetGrade) => {
       let filtered = studentUsers;
       if (targetGrade !== 'All') {
         filtered = studentUsers.filter(s => s.grade === targetGrade);
       }
-      const rooms = [...new Set(filtered.map(s => s.room).filter(r => r && r !== '-'))].sort();
+      const rawR = [...new Set(filtered.map(s => s.room).filter(r => r && r !== '-'))];
+      const rooms = sortRooms(rawR);
       if (rooms.length === 0) rooms.push('1', '2');
       return rooms;
     };

@@ -8,6 +8,7 @@
 import { firebaseService } from '../services/firebaseService.js';
 import { exportToCSV, printPDFReport } from '../services/exportService.js';
 import { decodeMojibakeThai } from '../services/mojibakeDecoder.js';
+import { sortGrades, sortRooms } from './students.js';
 
 export class GradebookModule {
   constructor(rbac) {
@@ -31,16 +32,18 @@ export class GradebookModule {
 
     const allStudentUsers = users.filter(u => u.role === 'Student');
 
-    // Available Grades
-    const availableGrades = ['All', ...new Set(allStudentUsers.map(s => s.grade).filter(g => g && g !== '-'))];
-    if (availableGrades.length === 1) availableGrades.push('ม.1', 'ม.2', 'ม.3', 'ปวช.1', 'ปวช.2');
+    // Available Grades (Sorted 1-6 naturally)
+    const rawGrades = [...new Set(allStudentUsers.map(s => s.grade).filter(g => g && g !== '-'))];
+    const availableGrades = ['All', ...sortGrades(rawGrades)];
+    if (availableGrades.length === 1) availableGrades.push('ม.1', 'ม.2', 'ม.3', 'ม.4', 'ม.5', 'ม.6');
 
-    // Dynamic Available Rooms based on selected Grade
+    // Dynamic Available Rooms based on selected Grade (Sorted naturally)
     let gradeFilteredUsers = allStudentUsers;
     if (this.selectedGrade !== 'All') {
       gradeFilteredUsers = allStudentUsers.filter(s => s.grade === this.selectedGrade);
     }
-    const availableRooms = [...new Set(gradeFilteredUsers.map(s => s.room).filter(r => r && r !== '-'))].sort();
+    const rawRooms = [...new Set(gradeFilteredUsers.map(s => s.room).filter(r => r && r !== '-'))];
+    const availableRooms = ['All', ...sortRooms(rawRooms)];
 
     // Apply Filters (1. Grade, 2. Room, 3. Individual Search Query)
     let filteredStudents = allStudentUsers;
