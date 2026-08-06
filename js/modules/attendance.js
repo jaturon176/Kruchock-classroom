@@ -2,6 +2,7 @@
  * Attendance Module
  * Period attendance register with 4-state status toggles (มา 🟢, สาย 🟡, ลา 🔵, ขาด 🔴),
  * dynamic system grade/room loading, 7 period options (คาบที่ 1-7),
+ * Multi-Period Selection support for consecutive classes (คาบติด 2-3 คาบพร้อมกัน),
  * and Official Government Daily Attendance Detailed Report with TH Sarabun typography.
  */
 
@@ -36,7 +37,7 @@ export class AttendanceModule {
     this.selectedCourseId = 'All';
     this.selectedGrade = 'ม.1';
     this.selectedRoom = '1';
-    this.selectedPeriod = PERIOD_OPTIONS[0];
+    this.selectedPeriods = [PERIOD_OPTIONS[0]]; // Multi-period selection array!
     this.attendanceDate = new Date().toISOString().substring(0, 10);
   }
 
@@ -46,6 +47,11 @@ export class AttendanceModule {
     const attendanceList = firebaseService.getCollection('attendance');
     const currentUser = this.rbac.getCurrentUser();
     const isTeacherOrAdmin = currentUser.role === 'Teacher' || currentUser.role === 'Admin';
+
+    // Ensure selectedPeriods array is properly initialized
+    if (!this.selectedPeriods || !Array.isArray(this.selectedPeriods) || this.selectedPeriods.length === 0) {
+      this.selectedPeriods = [PERIOD_OPTIONS[0]];
+    }
 
     // 1. Dynamic Grade List from System Users DB
     const studentUsers = users.filter(u => u.role === 'Student');
@@ -81,14 +87,19 @@ export class AttendanceModule {
       .filter(u => (this.selectedGrade === 'All' || u.grade === this.selectedGrade) && (this.selectedRoom === 'All' || u.room === this.selectedRoom))
       .sort((a, b) => (parseInt(a.no, 10) || 999) - (parseInt(b.no, 10) || 999));
 
-    // Find existing attendance record for date + course + period
-    const existingEntry = attendanceList.find(a => 
+    // Find existing attendance records for date + course + ANY selected periods
+    const existingEntries = attendanceList.filter(a => 
       a.date === this.attendanceDate && 
       a.courseId === this.selectedCourseId && 
-      a.period === this.selectedPeriod
+      this.selectedPeriods.includes(a.period)
     );
 
-    const recordsState = existingEntry ? { ...existingEntry.records } : {};
+    const recordsState = {};
+    existingEntries.forEach(entry => {
+      if (entry.records) {
+        Object.assign(recordsState, entry.records);
+      }
+    });
 
     // Fill defaults (Present) for missing students
     students.forEach(s => {
@@ -107,7 +118,7 @@ export class AttendanceModule {
               เช็กชื่อรายคาบเรียน (Period Attendance Register)
             </h2>
             <p class="text-slate-500 text-xs mt-1 leading-relaxed font-sarabun">
-              บันทึกเวลาเรียน 4 สถานะ (มา 🟢, สาย 🟡, ลา 🔵, ขาด 🔴) คาบเรียนที่ 1-7 พร้อมระบบรายงานสรุปรายวันและแก้ไขประวัติย้อนหลัง
+              บันทึกเวลาเรียน 4 สถานะ (มา 🟢, สาย 🟡, ลา 🔵, ขาด 🔴) รองรับการเลือกเช็กชื่อหลายคาบติดกัน (2-3 คาบ) พร้อมระบบรายงานสรุปรายวัน
             </p>
           </div>
 
@@ -119,60 +130,88 @@ export class AttendanceModule {
               🟢 มาเรียนทั้งหมด
             </button>
             <button id="btn-save-attendance" class="btn-primary text-xs px-5 py-2.5 rounded-xl font-sarabun font-semibold shadow-md shadow-indigo-500/20">
-              💾 ${existingEntry ? 'บันทึกการแก้ไข' : 'บันทึกการเช็กชื่อ'}
+              💾 ${existingEntries.length > 0 ? `บันทึกการแก้ไข (${this.selectedPeriods.length} คาบ)` : `บันทึกการเช็กชื่อ (${this.selectedPeriods.length} คาบ)`}
             </button>
           </div>
         </div>
 
         <!-- Existing Record Notification Banner & Delete Button -->
-        ${existingEntry ? `
+        ${existingEntries.length > 0 ? `
           <div class="p-4 bg-indigo-50/90 border border-indigo-200 rounded-2xl flex flex-wrap justify-between items-center gap-3 shadow-xs font-sarabun">
             <div class="flex items-center gap-2 text-xs text-indigo-900 font-bold">
               <span class="text-lg">✏️</span>
               <div>
-                <div>พบบันทึกการเช็กชื่อของคาบนี้ในระบบแล้ว (เช็กชื่อเมื่อวันที่ <strong>${formatDateThai(existingEntry.date)}</strong> - ${existingEntry.period})</div>
-                <div class="text-[11px] font-normal text-indigo-700 mt-0.5">คุณครูสามารถเลือกปรับเปลี่ยนสถานะนักเรียน แล้วกด <strong>"บันทึกการแก้ไข"</strong> หรือกดลบรายการได้</div>
+                <div>พบบันทึกการเช็กชื่อของ ${existingEntries.length} คาบที่เลือกในระบบแล้ว (วันที่ <strong>${formatDateThai(this.attendanceDate)}</strong>)</div>
+                <div class="text-[11px] font-normal text-indigo-700 mt-0.5">คุณครูสามารถปรับเปลี่ยนสถานะนักเรียน แล้วกด <strong>"บันทึกการแก้ไข"</strong> เพื่อปรับปรุงข้อมูล ${existingEntries.length} คาบพร้อมกันได้</div>
               </div>
             </div>
             ${isTeacherOrAdmin ? `
               <button id="btn-delete-current-att" class="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-sm transition-all flex items-center gap-1.5 font-sarabun">
-                <span>🗑️</span> ลบรายการเช็กชื่อคาบนี้
+                <span>🗑️</span> ลบรายการเช็กชื่อ (${existingEntries.length} คาบ)
               </button>
             ` : ''}
           </div>
         ` : ''}
 
-        <!-- Filter Controls -->
-        <div class="glass-card p-5 rounded-2xl grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 bg-white border border-slate-200 font-sarabun">
-          <div>
-            <label class="block text-xs font-semibold text-slate-600 mb-1">วันที่เช็กชื่อ</label>
-            <input type="date" id="att-date" value="${this.attendanceDate}" class="input-field py-1.5 text-xs font-sarabun">
-          </div>
+        <!-- Filter Controls with Multi-Period Selector -->
+        <div class="glass-card p-5 rounded-2xl space-y-4 bg-white border border-slate-200 font-sarabun">
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div>
+              <label class="block text-xs font-semibold text-slate-600 mb-1">วันที่เช็กชื่อ</label>
+              <input type="date" id="att-date" value="${this.attendanceDate}" class="input-field py-1.5 text-xs font-sarabun">
+            </div>
 
-          <div>
-            <label class="block text-xs font-semibold text-slate-600 mb-1">รายวิชา</label>
-            <select id="att-course" class="input-field py-1.5 text-xs font-sarabun">
-              ${courses.map(c => `<option value="${c.id}" ${this.selectedCourseId === c.id ? 'selected' : ''}>${c.code} ${c.name}</option>`).join('')}
-            </select>
-          </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-600 mb-1">รายวิชา</label>
+              <select id="att-course" class="input-field py-1.5 text-xs font-sarabun">
+                ${courses.map(c => `<option value="${c.id}" ${this.selectedCourseId === c.id ? 'selected' : ''}>${c.code} ${c.name}</option>`).join('')}
+              </select>
+            </div>
 
-          <div>
-            <label class="block text-xs font-semibold text-slate-600 mb-1">ระดับชั้น / ห้อง (ดึงจากระบบ)</label>
-            <div class="flex gap-2">
-              <select id="att-grade" class="input-field py-1.5 text-xs font-sarabun">
-                ${availableGrades.map(g => `<option value="${g}" ${this.selectedGrade === g ? 'selected' : ''}>${g}</option>`).join('')}
-              </select>
-              <select id="att-room" class="input-field py-1.5 text-xs font-sarabun">
-                ${availableRooms.map(r => `<option value="${r}" ${this.selectedRoom === r ? 'selected' : ''}>ห้อง ${r}</option>`).join('')}
-              </select>
+            <div>
+              <label class="block text-xs font-semibold text-slate-600 mb-1">ระดับชั้น / ห้อง (ดึงจากระบบ)</label>
+              <div class="flex gap-2">
+                <select id="att-grade" class="input-field py-1.5 text-xs font-sarabun">
+                  ${availableGrades.map(g => `<option value="${g}" ${this.selectedGrade === g ? 'selected' : ''}>${g}</option>`).join('')}
+                </select>
+                <select id="att-room" class="input-field py-1.5 text-xs font-sarabun">
+                  ${availableRooms.map(r => `<option value="${r}" ${this.selectedRoom === r ? 'selected' : ''}>ห้อง ${r}</option>`).join('')}
+                </select>
+              </div>
             </div>
           </div>
 
-          <div>
-            <label class="block text-xs font-semibold text-slate-600 mb-1">คาบเรียน (คาบ 1-7)</label>
-            <select id="att-period" class="input-field py-1.5 text-xs font-sarabun">
-              ${PERIOD_OPTIONS.map(p => `<option value="${p}" ${this.selectedPeriod === p ? 'selected' : ''}>${p}</option>`).join('')}
-            </select>
+          <!-- Multi-Period Interactive Pill Buttons -->
+          <div class="pt-3 border-t border-slate-100">
+            <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
+              <label class="block text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                <span>⏱️</span> เลือกคาบเรียน (คลิกเลือกหลายคาบพร้อมกันได้ กรณีสอน 2-3 คาบติด):
+              </label>
+              <span class="text-[11px] font-bold text-indigo-700 bg-indigo-50 px-2.5 py-0.5 rounded-full border border-indigo-100">
+                เลือกเช็กชื่อ ${this.selectedPeriods.length} คาบพร้อมกัน
+              </span>
+            </div>
+
+            <div class="flex flex-wrap gap-2">
+              ${PERIOD_OPTIONS.map((p, idx) => {
+                const isSelected = this.selectedPeriods.includes(p);
+                const periodNum = idx + 1;
+                const timeRange = p.match(/\((.*?)\)/)?.[1] || '';
+                return `
+                  <button type="button" data-period-btn="${p}" class="px-3.5 py-2 rounded-xl text-xs font-bold font-sarabun transition-all flex items-center gap-1.5 shadow-2xs border ${
+                    isSelected 
+                      ? 'bg-indigo-600 text-white border-indigo-600 shadow-indigo-500/20 ring-2 ring-indigo-200 scale-[1.02]' 
+                      : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200 hover:border-slate-300'
+                  }">
+                    <span class="w-4.5 h-4.5 rounded-full ${isSelected ? 'bg-white text-indigo-700 font-extrabold' : 'bg-slate-200 text-slate-600'} text-[10px] flex items-center justify-center">
+                      ${isSelected ? '✓' : periodNum}
+                    </span>
+                    <span>คาบที่ ${periodNum}</span>
+                    <span class="text-[11px] font-normal ${isSelected ? 'text-indigo-100' : 'text-slate-500'}">(${timeRange})</span>
+                  </button>
+                `;
+              }).join('')}
+            </div>
           </div>
         </div>
 
@@ -186,7 +225,7 @@ export class AttendanceModule {
                   <th class="p-4">รหัสนักเรียน</th>
                   <th class="p-4">ชื่อ-นามสกุล</th>
                   <th class="p-4 text-center">ชั้น / ห้อง</th>
-                  <th class="p-4 text-center">สถานะการเข้าเรียน</th>
+                  <th class="p-4 text-center">สถานะการเข้าเรียน (${this.selectedPeriods.length} คาบ)</th>
                   <th class="p-4 text-center">ประวัติ</th>
                 </tr>
               </thead>
@@ -239,6 +278,25 @@ export class AttendanceModule {
       </div>
     `;
 
+    // Multi-Period Pill Selector Buttons Binding
+    containerEl.querySelectorAll('[data-period-btn]').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const periodVal = e.currentTarget.dataset.periodBtn;
+        const index = this.selectedPeriods.indexOf(periodVal);
+
+        if (index >= 0) {
+          if (this.selectedPeriods.length > 1) {
+            this.selectedPeriods.splice(index, 1);
+          }
+        } else {
+          this.selectedPeriods.push(periodVal);
+          this.selectedPeriods.sort((a, b) => PERIOD_OPTIONS.indexOf(a) - PERIOD_OPTIONS.indexOf(b));
+        }
+
+        this.render(containerEl);
+      });
+    });
+
     // Filter Change Event Handlers
     containerEl.querySelector('#att-date')?.addEventListener('change', (e) => {
       this.attendanceDate = e.target.value;
@@ -256,25 +314,23 @@ export class AttendanceModule {
       this.selectedRoom = e.target.value;
       this.render(containerEl);
     });
-    containerEl.querySelector('#att-period')?.addEventListener('change', (e) => {
-      this.selectedPeriod = e.target.value;
-      this.render(containerEl);
-    });
 
     // Delete Current Attendance Session Handler
     containerEl.querySelector('#btn-delete-current-att')?.addEventListener('click', async () => {
       const confirmed = await showConfirmModal({
         title: '🗑️ ยืนยันการลบรายการเช็กชื่อ',
-        message: `คุณแน่ใจหรือไม่ว่าต้องการลบรายการเช็กชื่อประจำวันที่ ${formatDateThai(this.attendanceDate)} (${this.selectedPeriod})?`,
+        message: `คุณแน่ใจหรือไม่ว่าต้องการลบรายการเช็กชื่อประจำวันที่ ${formatDateThai(this.attendanceDate)} สำหรับทั้ง ${existingEntries.length} คาบที่เลือก?`,
         confirmText: 'ลบรายการเช็กชื่อ',
         cancelText: 'ยกเลิก'
       });
 
-      if (confirmed && existingEntry) {
-        firebaseService.deleteItem('attendance', existingEntry.id);
+      if (confirmed && existingEntries.length > 0) {
+        existingEntries.forEach(entry => {
+          firebaseService.deleteItem('attendance', entry.id);
+        });
         await showAlertModal({
           title: '🗑️ ลบข้อมูลสำเร็จ',
-          message: 'ลบรายการเช็กชื่อประจำคาบดังกล่าวเรียบร้อยแล้ว',
+          message: `ลบรายการเช็กชื่อประจำคาบที่เลือกเรียบร้อยแล้ว`,
           type: 'success'
         });
         this.render(containerEl);
@@ -323,26 +379,44 @@ export class AttendanceModule {
       this.render(containerEl);
     });
 
-    // Save Attendance Handler
+    // Save Attendance Handler (Multi-Period Batch Save)
     containerEl.querySelector('#btn-save-attendance')?.addEventListener('click', async () => {
-      const payload = {
-        date: this.attendanceDate,
-        courseId: this.selectedCourseId,
-        grade: this.selectedGrade,
-        room: this.selectedRoom,
-        period: this.selectedPeriod,
-        records: recordsState
-      };
-
-      if (existingEntry) {
-        firebaseService.updateItem('attendance', existingEntry.id, payload);
-      } else {
-        firebaseService.addItem('attendance', payload);
+      if (this.selectedPeriods.length === 0) {
+        await showAlertModal({ title: '⚠️ โปรดเลือกคาบเรียน', message: 'กรุณาเลือกคาบเรียนอย่างน้อย 1 คาบก่อนบันทึก' });
+        return;
       }
+
+      this.selectedPeriods.forEach(period => {
+        const existing = attendanceList.find(a => 
+          a.date === this.attendanceDate && 
+          a.courseId === this.selectedCourseId && 
+          a.period === period
+        );
+
+        const payload = {
+          date: this.attendanceDate,
+          courseId: this.selectedCourseId,
+          grade: this.selectedGrade,
+          room: this.selectedRoom,
+          period: period,
+          records: recordsState
+        };
+
+        if (existing) {
+          firebaseService.updateItem('attendance', existing.id, payload);
+        } else {
+          firebaseService.addItem('attendance', payload);
+        }
+      });
+
+      const periodNums = this.selectedPeriods.map(p => {
+        const idx = PERIOD_OPTIONS.indexOf(p);
+        return idx >= 0 ? `คาบที่ ${idx + 1}` : p;
+      }).join(', ');
 
       await showAlertModal({
         title: '💾 บันทึกการเช็กชื่อสำเร็จ',
-        message: `บันทึกเวลาเรียนสำหรับนักเรียน ${students.length} คน เรียบร้อยแล้ว`,
+        message: `บันทึกเวลาเรียนสำหรับนักเรียน ${students.length} คน ใน ${periodNums} (รวม ${this.selectedPeriods.length} คาบ) เรียบร้อยแล้ว`,
         type: 'success'
       });
       this.render(containerEl);
@@ -358,7 +432,7 @@ export class AttendanceModule {
     let currentTab = 'daily'; // 'daily' | 'stats' | 'manage_sessions'
     let dailyDate = this.attendanceDate;
     let dailyCourseId = this.selectedCourseId !== 'All' ? this.selectedCourseId : (courses[0] ? courses[0].id : 'All');
-    let dailyPeriod = this.selectedPeriod;
+    let dailyPeriod = this.selectedPeriods && this.selectedPeriods.length > 0 ? this.selectedPeriods[0] : PERIOD_OPTIONS[0];
     let rptGrade = this.selectedGrade !== 'All' ? this.selectedGrade : (availableGrades[0] || 'ม.1');
     let filterStatus = 'ALL'; // 'ALL' | 'Present' | 'Late' | 'Leave' | 'Absent'
     
@@ -768,8 +842,8 @@ export class AttendanceModule {
                       </span>
                     </td>
                     <td class="p-3 text-center">
-                      <button type="button" data-rpt-student-id="${st.studentId}" class="text-indigo-600 hover:text-indigo-800 font-bold hover:underline">
-                        🔍 รายรายละเอียด
+                      <button type="button" data-rpt-student-id="${st.studentId}" class="text-indigo-600 hover:text-indigo-800 font-bold hover:underline font-sarabun">
+                        🔍 รายละเอียด
                       </button>
                     </td>
                   </tr>
@@ -844,7 +918,7 @@ export class AttendanceModule {
               this.selectedCourseId = targetLog.courseId;
               this.selectedGrade = targetLog.grade || 'ม.1';
               this.selectedRoom = targetLog.room || '1';
-              this.selectedPeriod = targetLog.period;
+              this.selectedPeriods = [targetLog.period];
               modalEl.remove();
               if (mainContainerEl) this.render(mainContainerEl);
             }
