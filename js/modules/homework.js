@@ -1127,9 +1127,14 @@ export class HomeworkModule {
 
     modalEl.querySelectorAll('#close-sub-modal, #close-sub-btn').forEach(b => b.addEventListener('click', () => modalEl.remove()));
 
-    modalEl.querySelector('#sub-form').addEventListener('submit', (e) => {
+    modalEl.querySelector('#sub-form').addEventListener('submit', async (e) => {
       e.preventDefault();
-      const submissions = hw.submissions || [];
+      
+      // Always fetch fresh homework item directly from Firebase DB cache to prevent race condition data overwrite
+      const allHw = firebaseService.getCollection('homework');
+      const currentHw = allHw.find(h => h.id === hw.id) || hw;
+      const submissions = Array.isArray(currentHw.submissions) ? [...currentHw.submissions] : [];
+
       const index = submissions.findIndex(s => s.studentId === currentUser.studentId);
 
       const newSub = {
@@ -1149,148 +1154,283 @@ export class HomeworkModule {
         submissions.push(newSub);
       }
 
-      firebaseService.updateItem('homework', hw.id, { submissions });
+      await firebaseService.updateItem('homework', hw.id, { submissions });
       modalEl.remove();
       refreshCb();
     });
   }
 
   showGradingModal(hw, refreshCb) {
-    const submissions = hw.submissions || [];
+    const allHw = firebaseService.getCollection('homework');
+    const freshHw = allHw.find(h => h.id === hw.id) || hw;
+    const initialSubs = Array.isArray(freshHw.submissions) ? freshHw.submissions : [];
+
+    let currentFilterStatus = 'ALL'; // 'ALL' | 'Pending' | 'Graded'
+    let currentSearchText = '';
 
     const modalHTML = `
-      <div id="grade-modal" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
-        <div class="glass-card w-full max-w-3xl p-6 rounded-3xl shadow-xl relative border border-slate-200 bg-white max-h-[90vh] overflow-y-auto">
-          <div class="flex justify-between items-center pb-4 border-b border-slate-100">
+      <div id="grade-modal" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in font-sarabun">
+        <div class="glass-card w-full max-w-4xl p-6 rounded-3xl shadow-xl relative border border-slate-200 bg-white max-h-[92vh] flex flex-col space-y-4 font-sarabun">
+          
+          <!-- Modal Header -->
+          <div class="flex flex-wrap justify-between items-center pb-3 border-b border-slate-100 shrink-0 gap-2 font-sarabun">
             <div>
-              <h3 class="text-xl font-bold text-slate-900 font-heading">🔍 ตรวจงานนักเรียน: ${decodeMojibakeThai(hw.title)}</h3>
-              <p class="text-xs text-slate-500">คะแนนเต็ม: ${hw.maxPoints} คะแนน</p>
+              <h3 class="text-xl font-bold text-slate-900 font-heading flex items-center gap-2">
+                <span>🔍 ตรวจงานนักเรียน:</span> ${decodeMojibakeThai(freshHw.title)}
+              </h3>
+              <p class="text-xs text-slate-500 font-sarabun mt-0.5">
+                คะแนนเต็ม: <strong class="text-indigo-600 font-bold">${freshHw.maxPoints} คะแนน</strong> | 
+                ส่งงานทั้งหมด: <strong class="text-emerald-700 font-bold" id="header-sub-count">${initialSubs.length} คน</strong>
+              </p>
             </div>
-            <button id="close-grade-modal" class="text-slate-400 hover:text-slate-600 text-xl font-bold">✕</button>
+            <button id="close-grade-modal-x" class="text-slate-400 hover:text-slate-600 text-xl font-bold p-1">✕</button>
           </div>
 
-          <div class="space-y-4 mt-4">
-            ${submissions.length === 0 ? `
-              <div class="text-center py-10 text-slate-400">ยังไม่มีนักเรียนส่งการบ้านในรายการนี้</div>
-            ` : submissions.map((sub, idx) => `
-              <div class="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
-                <div class="flex justify-between items-center">
-                  <div class="font-bold text-slate-900 font-heading">${decodeMojibakeThai(sub.studentName)} (${sub.studentId})</div>
-                  <div class="flex items-center gap-3">
-                    <div class="text-xs text-slate-500 font-mono">${sub.submittedAt}</div>
-                    <button type="button" data-del-sub="${sub.studentId}" data-student-name="${decodeMojibakeThai(sub.studentName)}" class="text-rose-600 hover:text-rose-800 text-xs font-bold px-2.5 py-1 hover:bg-rose-50 rounded-xl border border-transparent hover:border-rose-200 transition-all flex items-center gap-1">
-                      <span>🗑️</span> ลบงานชิ้นนี้
-                    </button>
-                  </div>
-                </div>
-
-                <div class="text-xs text-slate-700 bg-white p-3.5 rounded-xl border border-slate-200 space-y-2">
-                  <div><strong>ข้อความคำตอบ:</strong> ${decodeMojibakeThai(sub.textResponse)}</div>
-                  
-                  ${sub.imageFile ? `
-                    <div class="pt-2 border-t border-slate-100">
-                      <div class="font-bold text-slate-700 mb-1.5 flex items-center justify-between">
-                        <span class="flex items-center gap-1">📸 รูปภาพงานที่ส่ง (Cloudinary CDN):</span>
-                        <span class="text-[11px] font-semibold text-indigo-600">🔍 คลิกรูปเพื่อดูขนาดย่อ/ขยายรูปเต็ม</span>
-                      </div>
-                      <div class="max-w-md rounded-2xl overflow-hidden border border-slate-200 shadow-sm bg-slate-900/5 relative group cursor-pointer" data-preview-img="${sub.imageFile}" data-student-name="${decodeMojibakeThai(sub.studentName)}">
-                        <img src="${sub.imageFile}" class="w-full max-h-64 object-contain group-hover:scale-105 transition-transform">
-                        <div class="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white font-bold text-xs gap-1.5 backdrop-blur-[2px]">
-                          <span class="text-base">🔍</span> คลิกเพื่อเปิดรูปภาพขนาดใหญ่
-                        </div>
-                      </div>
-                    </div>
-                  ` : ''}
-                </div>
-
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
-                  <div>
-                    <label class="block text-[11px] font-semibold text-slate-600 mb-1">ให้คะแนน (เต็ม ${hw.maxPoints})</label>
-                    <input type="number" max="${hw.maxPoints}" data-sub-idx="${idx}" class="sub-score-input input-field py-1 text-xs" value="${sub.score !== null ? sub.score : ''}" placeholder="ระบุคะแนน">
-                  </div>
-                  <div>
-                    <label class="block text-[11px] font-semibold text-slate-600 mb-1">คำแนะนำ / ความเห็นครู</label>
-                    <input type="text" data-sub-idx="${idx}" class="sub-feedback-input input-field py-1 text-xs" value="${sub.feedback || ''}" placeholder="เช่น ทำได้เยี่ยมมาก!">
-                  </div>
-                </div>
+          <!-- Search & Filter Controls -->
+          ${initialSubs.length > 0 ? `
+            <div class="flex flex-wrap items-center justify-between gap-3 p-3 bg-slate-50 rounded-2xl border border-slate-200 shrink-0 font-sarabun">
+              <div class="flex items-center gap-2 flex-1 max-w-md">
+                <input type="text" id="grade-search-input" class="input-field py-1.5 text-xs bg-white font-sarabun" placeholder="🔍 ค้นหาชื่อนักเรียน หรือ รหัสนักเรียน...">
               </div>
-            `).join('')}
+              <div class="flex items-center gap-2 text-xs font-bold font-sarabun">
+                <span class="text-slate-500">กรองสถานะ:</span>
+                <button type="button" data-grade-filter="ALL" class="px-2.5 py-1 rounded-lg border text-xs transition-all bg-indigo-600 text-white border-indigo-600">
+                  ทั้งหมด (${initialSubs.length})
+                </button>
+                <button type="button" data-grade-filter="Pending" class="px-2.5 py-1 rounded-lg border text-xs transition-all bg-amber-50 text-amber-800 border-amber-200">
+                  ⏳ รอตรวจ (${initialSubs.filter(s => s.status !== 'Graded').length})
+                </button>
+                <button type="button" data-grade-filter="Graded" class="px-2.5 py-1 rounded-lg border text-xs transition-all bg-emerald-50 text-emerald-800 border-emerald-200">
+                  ✅ ตรวจแล้ว (${initialSubs.filter(s => s.status === 'Graded').length})
+                </button>
+              </div>
+            </div>
+          ` : ''}
 
-            <div class="flex justify-end gap-3 pt-4 border-t border-slate-100">
-              <button id="close-grade-btn" class="btn-primary px-6 py-2.5 rounded-xl text-sm font-medium font-heading">บันทึกการตรวจงานทั้งหมด</button>
+          <!-- Scrollable Submissions List Container -->
+          <div id="grade-submissions-list" class="flex-1 overflow-y-auto space-y-4 pr-1 font-sarabun max-h-[62vh]">
+            <!-- Dynamically populated -->
+          </div>
+
+          <!-- Modal Footer -->
+          <div class="pt-3 border-t border-slate-100 flex flex-wrap justify-between items-center gap-3 shrink-0 font-sarabun">
+            <div class="text-xs text-slate-500 font-sarabun font-medium">
+              แสดงรายการส่งงาน <strong id="grade-count-text" class="text-slate-900 font-bold">${initialSubs.length}</strong> ชิ้นงาน
+            </div>
+            <div class="flex items-center gap-3">
+              <button id="close-grade-cancel-btn" class="px-4 py-2 rounded-xl text-slate-600 hover:bg-slate-100 text-xs font-bold font-sarabun">ยกเลิก</button>
+              <button id="close-grade-btn" class="btn-primary px-6 py-2.5 rounded-xl text-xs font-bold font-heading shadow-md shadow-indigo-500/20">
+                💾 บันทึกการตรวจงานทั้งหมด
+              </button>
             </div>
           </div>
+
         </div>
       </div>
     `;
 
     document.body.insertAdjacentHTML('beforeend', modalHTML);
     const modalEl = document.getElementById('grade-modal');
+    const listContainer = modalEl.querySelector('#grade-submissions-list');
+    const searchInput = modalEl.querySelector('#grade-search-input');
+    const headerSubCount = modalEl.querySelector('#header-sub-count');
 
-    // Bind Image Lightbox Modal Preview Handler
-    modalEl.querySelectorAll('[data-preview-img]').forEach(box => {
-      box.addEventListener('click', (e) => {
-        const imgUrl = e.currentTarget.dataset.previewImg;
-        const stdName = e.currentTarget.dataset.studentName;
-        showImagePreviewModal({
-          imageUrl: imgUrl,
-          title: `🖼️ รูปภาพงานส่งของนักเรียน`,
-          studentName: stdName
+    const renderSubmissionsList = () => {
+      const latestAllHw = firebaseService.getCollection('homework');
+      const latestHw = latestAllHw.find(h => h.id === hw.id) || hw;
+      const latestSubs = Array.isArray(latestHw.submissions) ? latestHw.submissions : [];
+
+      if (headerSubCount) headerSubCount.textContent = `${latestSubs.length} คน`;
+
+      let filtered = latestSubs;
+
+      if (currentFilterStatus === 'Pending') {
+        filtered = filtered.filter(s => s.status !== 'Graded');
+      } else if (currentFilterStatus === 'Graded') {
+        filtered = filtered.filter(s => s.status === 'Graded');
+      }
+
+      if (currentSearchText.trim()) {
+        const q = currentSearchText.trim().toLowerCase();
+        filtered = filtered.filter(s => 
+          decodeMojibakeThai(s.studentName).toLowerCase().includes(q) || 
+          (s.studentId && s.studentId.toLowerCase().includes(q))
+        );
+      }
+
+      const countText = modalEl.querySelector('#grade-count-text');
+      if (countText) countText.textContent = `${filtered.length}/${latestSubs.length}`;
+
+      if (filtered.length === 0) {
+        listContainer.innerHTML = `<div class="text-center py-12 text-slate-400 font-sarabun">ไม่พบรายการส่งงานของนักเรียนตามเงื่อนไขที่เลือก</div>`;
+        return;
+      }
+
+      listContainer.innerHTML = filtered.map((sub) => `
+        <div class="p-4.5 rounded-2xl bg-slate-50 border border-slate-200 space-y-3 font-sarabun hover:border-slate-300 transition-all shadow-xs" data-sub-card="${sub.studentId}">
+          <div class="flex justify-between items-center flex-wrap gap-2">
+            <div class="font-bold text-slate-900 font-heading text-sm flex items-center gap-2">
+              <span>👤 ${decodeMojibakeThai(sub.studentName)}</span>
+              <span class="font-mono text-xs text-indigo-600 font-bold bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-100">${sub.studentId}</span>
+              ${sub.status === 'Graded' ? `
+                <span class="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
+                  ✅ ตรวจแล้ว (${sub.score}/${latestHw.maxPoints})
+                </span>
+              ` : `
+                <span class="text-[11px] font-bold text-amber-700 bg-amber-50 px-2.5 py-0.5 rounded-full border border-amber-200">
+                  ⏳ รอตรวจ
+                </span>
+              `}
+            </div>
+
+            <div class="flex items-center gap-3">
+              <div class="text-xs text-slate-500 font-mono">📅 ${sub.submittedAt}</div>
+              <button type="button" data-del-sub="${sub.studentId}" data-student-name="${decodeMojibakeThai(sub.studentName)}" class="text-rose-600 hover:text-rose-800 text-xs font-bold px-2.5 py-1 hover:bg-rose-50 rounded-xl border border-transparent hover:border-rose-200 transition-all flex items-center gap-1 font-sarabun">
+                <span>🗑️</span> ลบงานชิ้นนี้
+              </button>
+            </div>
+          </div>
+
+          <!-- Student Response Text & Image -->
+          <div class="text-xs text-slate-700 bg-white p-3.5 rounded-xl border border-slate-200 space-y-2.5 shadow-2xs">
+            <div><strong>💬 ข้อความคำตอบ:</strong> ${decodeMojibakeThai(sub.textResponse || 'ไม่มีข้อความ')}</div>
+            
+            ${sub.imageFile ? `
+              <div class="pt-2 border-t border-slate-100">
+                <div class="font-bold text-slate-700 mb-1.5 flex items-center justify-between">
+                  <span class="flex items-center gap-1">🖼️ รูปภาพชิ้นงานที่ส่ง (Cloudinary CDN):</span>
+                  <span class="text-[11px] font-semibold text-indigo-600">🔍 คลิกรูปเพื่อดูรูปใหญ่</span>
+                </div>
+                <div class="max-w-md rounded-2xl overflow-hidden border border-slate-200 shadow-sm bg-slate-900/5 relative group cursor-pointer" data-preview-img="${sub.imageFile}" data-student-name="${decodeMojibakeThai(sub.studentName)}">
+                  <img src="${sub.imageFile}" class="w-full max-h-64 object-contain group-hover:scale-105 transition-transform">
+                  <div class="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white font-bold text-xs gap-1.5 backdrop-blur-[2px]">
+                    <span class="text-base">🔍</span> คลิกเพื่อเปิดรูปภาพขนาดใหญ่
+                  </div>
+                </div>
+              </div>
+            ` : ''}
+          </div>
+
+          <!-- Score & Feedback Inputs -->
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+            <div>
+              <label class="block text-[11px] font-bold text-slate-700 mb-1">ให้คะแนน (เต็ม ${latestHw.maxPoints} คะแนน):</label>
+              <input type="number" max="${latestHw.maxPoints}" min="0" data-student-id="${sub.studentId}" class="sub-score-input input-field py-1.5 text-xs bg-white font-bold text-indigo-900 font-sarabun" value="${sub.score !== null && sub.score !== undefined ? sub.score : ''}" placeholder="ระบุคะแนน">
+            </div>
+            <div>
+              <label class="block text-[11px] font-bold text-slate-700 mb-1">คำแนะนำ / ความเห็นครู:</label>
+              <input type="text" data-student-id="${sub.studentId}" class="sub-feedback-input input-field py-1.5 text-xs bg-white font-sarabun" value="${sub.feedback || ''}" placeholder="เช่น ทำได้เยี่ยมมาก!">
+            </div>
+          </div>
+        </div>
+      `).join('');
+
+      // Re-bind image preview lightbox
+      listContainer.querySelectorAll('[data-preview-img]').forEach(box => {
+        box.addEventListener('click', (e) => {
+          const imgUrl = e.currentTarget.dataset.previewImg;
+          const stdName = e.currentTarget.dataset.studentName;
+          showImagePreviewModal({
+            imageUrl: imgUrl,
+            title: `🖼️ รูปภาพงานส่งของนักเรียน`,
+            studentName: stdName
+          });
         });
+      });
+
+      // Re-bind delete submission
+      listContainer.querySelectorAll('[data-del-sub]').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          const stdId = e.currentTarget.dataset.delSub;
+          const stdName = e.currentTarget.dataset.studentName || 'นักเรียน';
+
+          const confirmed = await showConfirmModal({
+            title: '🗑️ ยืนยันการลบการส่งงาน',
+            message: `คุณแน่ใจหรือไม่ว่าต้องการลบชิ้นงานการบ้านที่ส่งของ "${decodeMojibakeThai(stdName)}"? หลังจากลบแล้วนักเรียนจะสามารถเข้าส่งงานใหม่อีกครั้งได้`,
+            confirmText: 'ลบการส่งงาน',
+            cancelText: 'ยกเลิก'
+          });
+
+          if (confirmed) {
+            const currentAllHw = firebaseService.getCollection('homework');
+            const currentHwObj = currentAllHw.find(h => h.id === hw.id) || hw;
+            
+            let currentSubs = Array.isArray(currentHwObj.submissions) ? [...currentHwObj.submissions] : [];
+            currentSubs = currentSubs.filter(s => s.studentId !== stdId);
+
+            currentHwObj.submissions = currentSubs;
+            hw.submissions = currentSubs;
+
+            await firebaseService.updateItem('homework', hw.id, { submissions: currentSubs });
+            renderSubmissionsList();
+            refreshCb();
+          }
+        });
+      });
+    };
+
+    renderSubmissionsList();
+
+    // Bind Search Input Filter
+    if (searchInput) {
+      searchInput.addEventListener('input', (e) => {
+        currentSearchText = e.target.value;
+        renderSubmissionsList();
+      });
+    }
+
+    // Bind Filter Status Buttons
+    modalEl.querySelectorAll('[data-grade-filter]').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        currentFilterStatus = e.currentTarget.dataset.gradeFilter;
+        modalEl.querySelectorAll('[data-grade-filter]').forEach(b => {
+          b.className = 'px-2.5 py-1 rounded-lg border text-xs transition-all bg-slate-100 text-slate-700 border-slate-200';
+        });
+        if (currentFilterStatus === 'ALL') e.currentTarget.className = 'px-2.5 py-1 rounded-lg border text-xs transition-all bg-indigo-600 text-white border-indigo-600';
+        else if (currentFilterStatus === 'Pending') e.currentTarget.className = 'px-2.5 py-1 rounded-lg border text-xs transition-all bg-amber-500 text-white border-amber-500';
+        else if (currentFilterStatus === 'Graded') e.currentTarget.className = 'px-2.5 py-1 rounded-lg border text-xs transition-all bg-emerald-600 text-white border-emerald-600';
+
+        renderSubmissionsList();
       });
     });
 
-    // Bind Delete Student Submission Handler
-    modalEl.querySelectorAll('[data-del-sub]').forEach(btn => {
-      btn.addEventListener('click', async (e) => {
-        const stdId = e.currentTarget.dataset.delSub;
-        const stdName = e.currentTarget.dataset.studentName || 'นักเรียน';
+    // Save All Grades Action
+    const saveGradesAction = async () => {
+      const latestAllHw = firebaseService.getCollection('homework');
+      const latestHw = latestAllHw.find(h => h.id === hw.id) || hw;
+      const currentSubs = Array.isArray(latestHw.submissions) ? [...latestHw.submissions] : [];
 
-        const confirmed = await showConfirmModal({
-          title: '🗑️ ยืนยันการลบการส่งงาน',
-          message: `คุณแน่ใจหรือไม่ว่าต้องการลบชิ้นงานการบ้านที่ส่งของ "${decodeMojibakeThai(stdName)}"? หลังจากลบแล้วนักเรียนจะสามารถเข้าส่งงานใหม่อีกครั้งได้`,
-          confirmText: 'ลบการส่งงาน',
-          cancelText: 'ยกเลิก'
-        });
-
-        if (confirmed) {
-          const allHw = firebaseService.getCollection('homework');
-          const activeHw = allHw.find(h => h.id === hw.id) || hw;
-          
-          let currentSubs = Array.isArray(activeHw.submissions) ? activeHw.submissions : [];
-          currentSubs = currentSubs.filter(s => s.studentId !== stdId);
-
-          activeHw.submissions = currentSubs;
-          hw.submissions = currentSubs;
-
-          await firebaseService.updateItem('homework', hw.id, { submissions: currentSubs });
-
-          modalEl.remove();
-          this.showGradingModal(activeHw, refreshCb);
-          refreshCb();
-        }
-      });
-    });
-
-    modalEl.querySelectorAll('#close-grade-modal, #close-grade-btn').forEach(b => b.addEventListener('click', () => {
-      const updatedSubmissions = [...submissions];
       modalEl.querySelectorAll('.sub-score-input').forEach(input => {
-        const idx = parseInt(input.dataset.subIdx, 10);
-        const val = input.value.trim();
-        if (updatedSubmissions[idx]) {
-          updatedSubmissions[idx].score = val !== '' ? parseInt(val, 10) : null;
-          updatedSubmissions[idx].status = val !== '' ? 'Graded' : 'Pending';
+        const stdId = input.dataset.studentId;
+        const subObj = currentSubs.find(s => s.studentId === stdId);
+        if (subObj) {
+          const val = input.value.trim();
+          subObj.score = val !== '' ? parseInt(val, 10) : null;
+          subObj.status = val !== '' ? 'Graded' : 'Pending';
         }
       });
 
       modalEl.querySelectorAll('.sub-feedback-input').forEach(input => {
-        const idx = parseInt(input.dataset.subIdx, 10);
-        if (updatedSubmissions[idx]) {
-          updatedSubmissions[idx].feedback = input.value.trim();
+        const stdId = input.dataset.studentId;
+        const subObj = currentSubs.find(s => s.studentId === stdId);
+        if (subObj) {
+          subObj.feedback = input.value.trim();
         }
       });
 
-      firebaseService.updateItem('homework', hw.id, { submissions: updatedSubmissions });
+      await firebaseService.updateItem('homework', hw.id, { submissions: currentSubs });
+      await showAlertModal({
+        title: '💾 บันทึกการตรวจงานสำเร็จ',
+        message: `บันทึกการตรวจงานของนักเรียนทั้งหมด ${currentSubs.length} คน เรียบร้อยแล้ว`,
+        type: 'success'
+      });
+      modalEl.remove();
+      refreshCb();
+    };
+
+    modalEl.querySelector('#close-grade-btn')?.addEventListener('click', saveGradesAction);
+
+    modalEl.querySelectorAll('#close-grade-modal-x, #close-grade-cancel-btn').forEach(b => b.addEventListener('click', () => {
       modalEl.remove();
       refreshCb();
     }));
