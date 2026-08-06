@@ -1168,6 +1168,14 @@ export class HomeworkModule {
     let currentFilterStatus = 'ALL'; // 'ALL' | 'Pending' | 'Graded'
     let currentSearchText = '';
 
+    // Expanded Accordion State Set (Default: expand pending items or first item)
+    const expandedStudentIds = new Set();
+    initialSubs.forEach((s, idx) => {
+      if (s.status !== 'Graded' || idx === 0) {
+        expandedStudentIds.add(s.studentId);
+      }
+    });
+
     const modalHTML = `
       <div id="grade-modal" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in font-sarabun">
         <div class="glass-card w-full max-w-4xl p-6 rounded-3xl shadow-xl relative border border-slate-200 bg-white max-h-[92vh] flex flex-col space-y-4 font-sarabun">
@@ -1186,13 +1194,13 @@ export class HomeworkModule {
             <button id="close-grade-modal-x" class="text-slate-400 hover:text-slate-600 text-xl font-bold p-1">✕</button>
           </div>
 
-          <!-- Search & Filter Controls -->
+          <!-- Search & Filter Controls Toolbar -->
           ${initialSubs.length > 0 ? `
             <div class="flex flex-wrap items-center justify-between gap-3 p-3 bg-slate-50 rounded-2xl border border-slate-200 shrink-0 font-sarabun">
               <div class="flex items-center gap-2 flex-1 max-w-md">
                 <input type="text" id="grade-search-input" class="input-field py-1.5 text-xs bg-white font-sarabun" placeholder="🔍 ค้นหาชื่อนักเรียน หรือ รหัสนักเรียน...">
               </div>
-              <div class="flex items-center gap-2 text-xs font-bold font-sarabun">
+              <div class="flex flex-wrap items-center gap-2 text-xs font-bold font-sarabun">
                 <span class="text-slate-500">กรองสถานะ:</span>
                 <button type="button" data-grade-filter="ALL" class="px-2.5 py-1 rounded-lg border text-xs transition-all bg-indigo-600 text-white border-indigo-600">
                   ทั้งหมด (${initialSubs.length})
@@ -1203,13 +1211,23 @@ export class HomeworkModule {
                 <button type="button" data-grade-filter="Graded" class="px-2.5 py-1 rounded-lg border text-xs transition-all bg-emerald-50 text-emerald-800 border-emerald-200">
                   ✅ ตรวจแล้ว (${initialSubs.filter(s => s.status === 'Graded').length})
                 </button>
+
+                <div class="h-4 w-px bg-slate-200 mx-1 hidden sm:block"></div>
+
+                <!-- Global Expand/Collapse Accordion Controls -->
+                <button type="button" id="btn-expand-all" class="px-2.5 py-1 rounded-lg border text-xs transition-all bg-white hover:bg-slate-100 text-slate-700 border-slate-200">
+                  ▼ ขยายทั้งหมด
+                </button>
+                <button type="button" id="btn-collapse-all" class="px-2.5 py-1 rounded-lg border text-xs transition-all bg-white hover:bg-slate-100 text-slate-700 border-slate-200">
+                  ▲ หดทั้งหมด
+                </button>
               </div>
             </div>
           ` : ''}
 
           <!-- Scrollable Submissions List Container -->
-          <div id="grade-submissions-list" class="flex-1 overflow-y-auto space-y-4 pr-1 font-sarabun max-h-[62vh]">
-            <!-- Dynamically populated -->
+          <div id="grade-submissions-list" class="flex-1 overflow-y-auto space-y-3 pr-1 font-sarabun max-h-[62vh]">
+            <!-- Dynamically populated Compact Accordion List -->
           </div>
 
           <!-- Modal Footer -->
@@ -1266,68 +1284,101 @@ export class HomeworkModule {
         return;
       }
 
-      listContainer.innerHTML = filtered.map((sub) => `
-        <div class="p-4.5 rounded-2xl bg-slate-50 border border-slate-200 space-y-3 font-sarabun hover:border-slate-300 transition-all shadow-xs" data-sub-card="${sub.studentId}">
-          <div class="flex justify-between items-center flex-wrap gap-2">
-            <div class="font-bold text-slate-900 font-heading text-sm flex items-center gap-2">
-              <span>👤 ${decodeMojibakeThai(sub.studentName)}</span>
-              <span class="font-mono text-xs text-indigo-600 font-bold bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-100">${sub.studentId}</span>
-              ${sub.status === 'Graded' ? `
-                <span class="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
-                  ✅ ตรวจแล้ว (${sub.score}/${latestHw.maxPoints})
+      listContainer.innerHTML = filtered.map((sub) => {
+        const isExpanded = expandedStudentIds.has(sub.studentId);
+        return `
+          <div class="rounded-2xl border border-slate-200 bg-white overflow-hidden shadow-2xs font-sarabun transition-all duration-200 hover:border-slate-300" data-sub-card="${sub.studentId}">
+            <!-- Compact Header Row (Click to toggle expand/collapse) -->
+            <div class="p-3.5 bg-slate-50 hover:bg-slate-100/90 cursor-pointer flex items-center justify-between gap-3 select-none font-sarabun" data-accordion-toggle="${sub.studentId}">
+              <div class="flex items-center gap-2.5 min-w-0">
+                <span class="text-slate-400 font-bold transition-transform duration-200 text-xs ${isExpanded ? 'rotate-90 text-indigo-600' : ''}">
+                  ▶
                 </span>
-              ` : `
-                <span class="text-[11px] font-bold text-amber-700 bg-amber-50 px-2.5 py-0.5 rounded-full border border-amber-200">
-                  ⏳ รอตรวจ
-                </span>
-              `}
-            </div>
-
-            <div class="flex items-center gap-3">
-              <div class="text-xs text-slate-500 font-mono">📅 ${sub.submittedAt}</div>
-              <button type="button" data-del-sub="${sub.studentId}" data-student-name="${decodeMojibakeThai(sub.studentName)}" class="text-rose-600 hover:text-rose-800 text-xs font-bold px-2.5 py-1 hover:bg-rose-50 rounded-xl border border-transparent hover:border-rose-200 transition-all flex items-center gap-1 font-sarabun">
-                <span>🗑️</span> ลบงานชิ้นนี้
-              </button>
-            </div>
-          </div>
-
-          <!-- Student Response Text & Image -->
-          <div class="text-xs text-slate-700 bg-white p-3.5 rounded-xl border border-slate-200 space-y-2.5 shadow-2xs">
-            <div><strong>💬 ข้อความคำตอบ:</strong> ${decodeMojibakeThai(sub.textResponse || 'ไม่มีข้อความ')}</div>
-            
-            ${sub.imageFile ? `
-              <div class="pt-2 border-t border-slate-100">
-                <div class="font-bold text-slate-700 mb-1.5 flex items-center justify-between">
-                  <span class="flex items-center gap-1">🖼️ รูปภาพชิ้นงานที่ส่ง (Cloudinary CDN):</span>
-                  <span class="text-[11px] font-semibold text-indigo-600">🔍 คลิกรูปเพื่อดูรูปใหญ่</span>
-                </div>
-                <div class="max-w-md rounded-2xl overflow-hidden border border-slate-200 shadow-sm bg-slate-900/5 relative group cursor-pointer" data-preview-img="${sub.imageFile}" data-student-name="${decodeMojibakeThai(sub.studentName)}">
-                  <img src="${sub.imageFile}" class="w-full max-h-64 object-contain group-hover:scale-105 transition-transform">
-                  <div class="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white font-bold text-xs gap-1.5 backdrop-blur-[2px]">
-                    <span class="text-base">🔍</span> คลิกเพื่อเปิดรูปภาพขนาดใหญ่
-                  </div>
+                <div class="font-bold text-slate-900 font-heading text-sm truncate flex items-center gap-2">
+                  <span>👤 ${decodeMojibakeThai(sub.studentName)}</span>
+                  <span class="font-mono text-xs text-indigo-600 font-bold bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-100">${sub.studentId}</span>
                 </div>
               </div>
-            ` : ''}
-          </div>
 
-          <!-- Score & Feedback Inputs -->
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
-            <div>
-              <label class="block text-[11px] font-bold text-slate-700 mb-1">ให้คะแนน (เต็ม ${latestHw.maxPoints} คะแนน):</label>
-              <input type="number" max="${latestHw.maxPoints}" min="0" data-student-id="${sub.studentId}" class="sub-score-input input-field py-1.5 text-xs bg-white font-bold text-indigo-900 font-sarabun" value="${sub.score !== null && sub.score !== undefined ? sub.score : ''}" placeholder="ระบุคะแนน">
+              <div class="flex items-center gap-3 shrink-0">
+                <!-- Status Badge -->
+                ${sub.status === 'Graded' ? `
+                  <span class="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
+                    ✅ ตรวจแล้ว (${sub.score}/${latestHw.maxPoints})
+                  </span>
+                ` : `
+                  <span class="text-[11px] font-bold text-amber-700 bg-amber-50 px-2.5 py-0.5 rounded-full border border-amber-200">
+                    ⏳ รอตรวจ
+                  </span>
+                `}
+
+                <div class="text-xs text-slate-500 font-mono hidden sm:block">📅 ${sub.submittedAt}</div>
+
+                <!-- Delete Button -->
+                <button type="button" data-del-sub="${sub.studentId}" data-student-name="${decodeMojibakeThai(sub.studentName)}" class="text-rose-600 hover:text-rose-800 text-xs font-bold px-2 py-1 hover:bg-rose-50 rounded-xl border border-transparent hover:border-rose-200 transition-all flex items-center gap-1 font-sarabun" title="ลบงานชิ้นนี้">
+                  <span>🗑️</span>
+                </button>
+              </div>
             </div>
-            <div>
-              <label class="block text-[11px] font-bold text-slate-700 mb-1">คำแนะนำ / ความเห็นครู:</label>
-              <input type="text" data-student-id="${sub.studentId}" class="sub-feedback-input input-field py-1.5 text-xs bg-white font-sarabun" value="${sub.feedback || ''}" placeholder="เช่น ทำได้เยี่ยมมาก!">
+
+            <!-- Expandable Content Body -->
+            <div class="p-4 space-y-3 bg-white border-t border-slate-100 ${isExpanded ? '' : 'hidden'}" data-accordion-body="${sub.studentId}">
+              <!-- Student Response Text & Image -->
+              <div class="text-xs text-slate-700 bg-slate-50/80 p-3.5 rounded-xl border border-slate-200 space-y-2.5 shadow-2xs">
+                <div><strong>💬 ข้อความคำตอบ:</strong> ${decodeMojibakeThai(sub.textResponse || 'ไม่มีข้อความ')}</div>
+                
+                ${sub.imageFile ? `
+                  <div class="pt-2 border-t border-slate-200/60">
+                    <div class="font-bold text-slate-700 mb-1.5 flex items-center justify-between">
+                      <span class="flex items-center gap-1">🖼️ รูปภาพชิ้นงานที่ส่ง (Cloudinary CDN):</span>
+                      <span class="text-[11px] font-semibold text-indigo-600">🔍 คลิกรูปเพื่อดูรูปใหญ่</span>
+                    </div>
+                    <div class="max-w-md rounded-2xl overflow-hidden border border-slate-200 shadow-sm bg-slate-900/5 relative group cursor-pointer" data-preview-img="${sub.imageFile}" data-student-name="${decodeMojibakeThai(sub.studentName)}">
+                      <img src="${sub.imageFile}" class="w-full max-h-64 object-contain group-hover:scale-105 transition-transform">
+                      <div class="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white font-bold text-xs gap-1.5 backdrop-blur-[2px]">
+                        <span class="text-base">🔍</span> คลิกเพื่อเปิดรูปภาพขนาดใหญ่
+                      </div>
+                    </div>
+                  </div>
+                ` : ''}
+              </div>
+
+              <!-- Score & Feedback Inputs -->
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+                <div>
+                  <label class="block text-[11px] font-bold text-slate-700 mb-1">ให้คะแนน (เต็ม ${latestHw.maxPoints} คะแนน):</label>
+                  <input type="number" max="${latestHw.maxPoints}" min="0" data-student-id="${sub.studentId}" class="sub-score-input input-field py-1.5 text-xs bg-white font-bold text-indigo-900 font-sarabun" value="${sub.score !== null && sub.score !== undefined ? sub.score : ''}" placeholder="ระบุคะแนน">
+                </div>
+                <div>
+                  <label class="block text-[11px] font-bold text-slate-700 mb-1">คำแนะนำ / ความเห็นครู:</label>
+                  <input type="text" data-student-id="${sub.studentId}" class="sub-feedback-input input-field py-1.5 text-xs bg-white font-sarabun" value="${sub.feedback || ''}" placeholder="เช่น ทำได้เยี่ยมมาก!">
+                </div>
+              </div>
             </div>
           </div>
-        </div>
-      `).join('');
+        `;
+      }).join('');
+
+      // Accordion Toggle Event Handlers
+      listContainer.querySelectorAll('[data-accordion-toggle]').forEach(header => {
+        header.addEventListener('click', (e) => {
+          // If clicked delete button, don't toggle accordion
+          if (e.target.closest('[data-del-sub]')) return;
+
+          const stdId = header.dataset.accordionToggle;
+          if (expandedStudentIds.has(stdId)) {
+            expandedStudentIds.delete(stdId);
+          } else {
+            expandedStudentIds.add(stdId);
+          }
+          renderSubmissionsList();
+        });
+      });
 
       // Re-bind image preview lightbox
       listContainer.querySelectorAll('[data-preview-img]').forEach(box => {
         box.addEventListener('click', (e) => {
+          e.stopPropagation();
           const imgUrl = e.currentTarget.dataset.previewImg;
           const stdName = e.currentTarget.dataset.studentName;
           showImagePreviewModal({
@@ -1341,6 +1392,7 @@ export class HomeworkModule {
       // Re-bind delete submission
       listContainer.querySelectorAll('[data-del-sub]').forEach(btn => {
         btn.addEventListener('click', async (e) => {
+          e.stopPropagation();
           const stdId = e.currentTarget.dataset.delSub;
           const stdName = e.currentTarget.dataset.studentName || 'นักเรียน';
 
@@ -1392,6 +1444,20 @@ export class HomeworkModule {
 
         renderSubmissionsList();
       });
+    });
+
+    // Global Expand All & Collapse All Controls
+    modalEl.querySelector('#btn-expand-all')?.addEventListener('click', () => {
+      const latestAllHw = firebaseService.getCollection('homework');
+      const latestHw = latestAllHw.find(h => h.id === hw.id) || hw;
+      const latestSubs = Array.isArray(latestHw.submissions) ? latestHw.submissions : [];
+      latestSubs.forEach(s => expandedStudentIds.add(s.studentId));
+      renderSubmissionsList();
+    });
+
+    modalEl.querySelector('#btn-collapse-all')?.addEventListener('click', () => {
+      expandedStudentIds.clear();
+      renderSubmissionsList();
     });
 
     // Save All Grades Action
