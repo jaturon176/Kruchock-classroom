@@ -29,7 +29,7 @@ class FirebaseRealtimeService {
     this.app = null;
     this.db = null;
     this.isRealtimeConnected = false;
-    this.collections = ['users', 'courses', 'homework', 'quizzes', 'announcements', 'attendance'];
+    this.collections = ['users', 'courses', 'homework', 'quizzes', 'announcements', 'attendance', 'clubs'];
 
     // Seed local cache defaults if empty
     this.initLocalDefaults();
@@ -45,6 +45,7 @@ class FirebaseRealtimeService {
     if (localStorage.getItem('ag_quizzes') === null) localStorage.setItem('ag_quizzes', JSON.stringify([SAMPLE_QUIZ]));
     if (localStorage.getItem('ag_announcements') === null) localStorage.setItem('ag_announcements', JSON.stringify(INITIAL_ANNOUNCEMENTS));
     if (localStorage.getItem('ag_attendance') === null) localStorage.setItem('ag_attendance', JSON.stringify(INITIAL_ATTENDANCE));
+    if (localStorage.getItem('ag_clubs') === null) localStorage.setItem('ag_clubs', JSON.stringify([]));
   }
 
   normalizeItem(item) {
@@ -130,6 +131,7 @@ class FirebaseRealtimeService {
       await set(ref(this.db, 'quizzes'), this.arrayToMap([SAMPLE_QUIZ]));
       await set(ref(this.db, 'announcements'), this.arrayToMap(INITIAL_ANNOUNCEMENTS));
       await set(ref(this.db, 'attendance'), this.arrayToMap(INITIAL_ATTENDANCE));
+      await set(ref(this.db, 'clubs'), this.arrayToMap([]));
       
       // Set Sentinel Flag so system never re-seeds deleted items
       await set(sentinelRef, true);
