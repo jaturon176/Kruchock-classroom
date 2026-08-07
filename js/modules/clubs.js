@@ -88,9 +88,11 @@ export class ClubsModule {
               <p class="text-xs text-slate-500 mt-1">คุณครูสามารถกดปุ่ม "สร้างชุมนุม/ชมรมใหม่" เพื่อเริ่มสร้างกิจกรรมชุมนุมได้ทันที</p>
             </div>
           ` : clubs.map(club => {
-            const members = Array.isArray(club.members) ? club.members : [];
-            const isMember = currentUser.role === 'Student' && members.includes(currentUser.studentId);
-            const isFull = members.length >= (club.maxCapacity || 40);
+            const rawMemberIds = [...new Set(Array.isArray(club.members) ? club.members : [])];
+            const validMembers = studentUsers.filter(s => rawMemberIds.includes(s.studentId));
+            const memberCount = validMembers.length;
+            const isMember = currentUser.role === 'Student' && rawMemberIds.includes(currentUser.studentId);
+            const isFull = memberCount >= (club.maxCapacity || 40);
 
             return `
               <div class="glass-card p-6 rounded-3xl bg-white border border-slate-200 shadow-sm hover:shadow-md transition-all flex flex-col justify-between space-y-4 font-sarabun relative group">
@@ -102,7 +104,7 @@ export class ClubsModule {
                     <span class="px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
                       isFull ? 'bg-rose-50 text-rose-700 border border-rose-200' : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                     }">
-                      👥 ${members.length} / ${club.maxCapacity || 40} คน
+                      👥 ${memberCount} / ${club.maxCapacity || 40} คน
                     </span>
                   </div>
 
@@ -1046,8 +1048,9 @@ export class ClubsModule {
             updatedMembers.push(stdId);
           }
 
-          club.members = updatedMembers;
-          firebaseService.updateItem('clubs', club.id, { members: updatedMembers });
+          const cleanMembers = [...new Set(updatedMembers)];
+          club.members = cleanMembers;
+          firebaseService.updateItem('clubs', club.id, { members: cleanMembers });
           renderPickerList(search);
         });
       });
