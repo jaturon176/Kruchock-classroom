@@ -10,10 +10,11 @@ import { StudentsModule } from './modules/students.js?v=24.3';
 import { HomeworkModule } from './modules/homework.js?v=24.3';
 import { QuizModule } from './modules/quiz.js?v=24.3';
 import { AttendanceModule } from './modules/attendance.js?v=24.3';
-import { GradebookModule } from './modules/gradebook.js?v=24.3';
-import { SettingsModule } from './modules/settings.js?v=24.3';
-import { syncEngine } from './services/syncEngine.js?v=24.3';
-import { decodeMojibakeThai } from './services/mojibakeDecoder.js?v=24.3';
+import { GradebookModule } from './modules/gradebook.js?v=25.0';
+import { ClubsModule } from './modules/clubs.js?v=25.0';
+import { SettingsModule } from './modules/settings.js?v=25.0';
+import { syncEngine } from './services/syncEngine.js?v=25.0';
+import { decodeMojibakeThai } from './services/mojibakeDecoder.js?v=25.0';
 
 class SchoolApp {
   constructor() {
@@ -27,6 +28,7 @@ class SchoolApp {
     this.quizModule = new QuizModule(this.rbac);
     this.attendanceModule = new AttendanceModule(this.rbac);
     this.gradebookModule = new GradebookModule(this.rbac);
+    this.clubsModule = new ClubsModule(this.rbac);
 
     this.initSyncStatus();
     this.renderHeader();
@@ -118,6 +120,7 @@ class SchoolApp {
       { id: 'homework', label: '📚 วิชา/การบ้าน', roles: ['Admin', 'Teacher', 'Student'] },
       { id: 'quiz', label: '✨ แบบทดสอบ', roles: ['Admin', 'Teacher', 'Student'] },
       { id: 'attendance', label: '⏱️ เช็กชื่อรายคาบ', roles: ['Admin', 'Teacher'] },
+      { id: 'clubs', label: '🏆 กิจกรรมชุมนุม', roles: ['Admin', 'Teacher', 'Student'] },
       { id: 'gradebook', label: '📊 คะแนน/รายงาน', roles: ['Admin', 'Teacher', 'Student'] },
       { id: 'users', label: '👑 จัดการผู้ใช้ (RBAC)', roles: ['Admin'] },
       { id: 'settings', label: '⚙️ ตั้งค่าระบบ', roles: ['Admin', 'Teacher'] },
@@ -251,6 +254,8 @@ class SchoolApp {
       this.quizModule.render(mainContainer);
     } else if (this.activeTab === 'attendance') {
       this.attendanceModule.render(mainContainer);
+    } else if (this.activeTab === 'clubs') {
+      this.clubsModule.render(mainContainer);
     } else if (this.activeTab === 'gradebook') {
       this.gradebookModule.render(mainContainer);
     } else if (this.activeTab === 'users' && this.rbac.canManageUsers()) {
