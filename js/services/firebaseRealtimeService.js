@@ -189,10 +189,16 @@ class FirebaseRealtimeService {
   // 🌐 Write / Add Item to Central Primary Server
   async addItem(collectionKey, item) {
     const newItem = { ...item, id: item.id || (collectionKey.slice(0,3) + '_' + Date.now() + '_' + Math.random().toString(36).substr(2,4)) };
+    const cleanItem = this.sanitizeForFirebase(newItem);
     
     // Update local cache for optimistic response
     const items = this.getCollection(collectionKey);
-    items.unshift(newItem);
+    const existingIdx = items.findIndex(x => x.id === cleanItem.id);
+    if (existingIdx !== -1) {
+      items[existingIdx] = cleanItem;
+    } else {
+      items.unshift(cleanItem);
+    }
     localStorage.setItem('ag_' + collectionKey, JSON.stringify(items));
 
     // Broadcast local addition immediately
@@ -202,10 +208,10 @@ class FirebaseRealtimeService {
 
     // Push to Central Server immediately
     if (this.isRealtimeConnected && this.db) {
-      const itemRef = ref(this.db, `${collectionKey}/${newItem.id}`);
-      await set(itemRef, newItem).catch(err => console.warn('Central server addItem error:', err));
+      const itemRef = ref(this.db, `${collectionKey}/${cleanItem.id}`);
+      await set(itemRef, cleanItem).catch(err => console.error('Central server addItem error:', err));
     }
-    return newItem;
+    return cleanItem;
   }
 
   // 🌐 Update Item on Central Primary Server
@@ -213,7 +219,8 @@ class FirebaseRealtimeService {
     const items = this.getCollection(collectionKey);
     const index = items.findIndex(x => x.id === id);
     if (index !== -1) {
-      items[index] = { ...items[index], ...updates };
+      const cleanUpdates = this.sanitizeForFirebase(updates);
+      items[index] = { ...items[index], ...cleanUpdates };
       localStorage.setItem('ag_' + collectionKey, JSON.stringify(items));
 
       // Broadcast local update immediately
@@ -223,7 +230,7 @@ class FirebaseRealtimeService {
 
       if (this.isRealtimeConnected && this.db) {
         const itemRef = ref(this.db, `${collectionKey}/${id}`);
-        await update(itemRef, updates).catch(err => console.warn('Central server updateItem error:', err));
+        await update(itemRef, cleanUpdates).catch(err => console.error('Central server updateItem error:', err));
       }
       return items[index];
     }
@@ -310,7 +317,10 @@ class FirebaseRealtimeService {
       const clean = {};
       for (const k in obj) {
         if (Object.prototype.hasOwnProperty.call(obj, k)) {
-          clean[k] = this.sanitizeForFirebase(obj[k]);
+          const val = obj[k];
+          if (val !== undefined) {
+            clean[k] = this.sanitizeForFirebase(val);
+          }
         }
       }
       return clean;
