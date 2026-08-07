@@ -854,25 +854,56 @@ export class ClubsModule {
     const isEdit = !!club;
     const teacherUsers = users.filter(u => u.role === 'Teacher' || u.role === 'Admin');
 
+    // Parse existing teachers for edit mode
+    let existingTeacherNames = [];
+    if (club) {
+      if (Array.isArray(club.teachers) && club.teachers.length > 0) {
+        existingTeacherNames = club.teachers;
+      } else if (club.teacherName) {
+        existingTeacherNames = club.teacherName.split(',').map(s => s.trim());
+      }
+    }
+
+    const selectedTeacherSet = new Set(existingTeacherNames);
+
     const modalHTML = `
       <div id="club-form-modal" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in font-sarabun">
-        <div class="glass-card w-full max-w-xl p-6 rounded-3xl shadow-xl relative border border-slate-200 bg-white font-sarabun space-y-4">
-          <div class="flex justify-between items-center pb-3 border-b border-slate-100">
+        <div class="glass-card w-full max-w-xl p-6 rounded-3xl shadow-xl relative border border-slate-200 bg-white font-sarabun space-y-4 max-h-[90vh] flex flex-col">
+          <div class="flex justify-between items-center pb-3 border-b border-slate-100 shrink-0">
             <h3 class="text-lg font-bold font-heading text-slate-900">
               ${isEdit ? '✏️ แก้ไขข้อมูลกิจกรรมชุมนุม' : '➕ สร้างกิจกรรมชุมนุม/ชมรมใหม่'}
             </h3>
             <button id="close-club-form" class="text-slate-400 hover:text-slate-600 text-xl font-bold">✕</button>
           </div>
 
-          <form id="club-form-el" class="space-y-3 font-sarabun">
+          <form id="club-form-el" class="space-y-3 font-sarabun overflow-y-auto flex-1 pr-1">
             <div>
               <label class="block text-xs font-bold text-slate-700 mb-1">ชื่อชุมนุม/ชมรม:</label>
               <input type="text" id="club-name-input" class="input-field py-1.5 text-xs" value="${club ? decodeMojibakeThai(club.name) : ''}" required placeholder="เช่น ชมรมคอมพิวเตอร์และหุ่นยนต์">
             </div>
 
+            <!-- Multi-Select Teacher Picker from System Users -->
             <div>
-              <label class="block text-xs font-bold text-slate-700 mb-1">ครูประจำชุมนุม:</label>
-              <input type="text" id="club-teacher-input" class="input-field py-1.5 text-xs" value="${club ? decodeMojibakeThai(club.teacherName) : ''}" required placeholder="เช่น ครูสุริยะ วงศ์มา">
+              <label class="block text-xs font-bold text-slate-700 mb-1">
+                👨‍🏫 เลือกครูประจำชุมนุม (เลือกจากรายชื่อครูในระบบ สามารถเลือกได้มากกว่า 1 คน):
+              </label>
+              <div class="p-3 bg-slate-50 border border-slate-200 rounded-2xl space-y-2 max-h-44 overflow-y-auto">
+                ${teacherUsers.length === 0 ? `
+                  <div class="text-xs text-slate-400 text-center py-2">ไม่มีข้อมูลรายชื่อครูในระบบ</div>
+                ` : teacherUsers.map(t => {
+                  const tName = decodeMojibakeThai(t.name);
+                  const isChecked = selectedTeacherSet.has(tName) || (existingTeacherNames.length > 0 && existingTeacherNames.some(et => et.includes(tName)));
+                  return `
+                    <label class="flex items-center gap-2.5 p-2 bg-white rounded-xl border ${isChecked ? 'border-indigo-400 bg-indigo-50/50' : 'border-slate-200'} cursor-pointer hover:border-indigo-300 transition-all text-xs">
+                      <input type="checkbox" name="club-teacher-check" value="${tName}" ${isChecked ? 'checked' : ''} class="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500">
+                      <div class="flex-1 font-semibold text-slate-800">
+                        👨‍🏫 ${tName} <span class="text-[11px] text-slate-400 font-normal">(${t.email || t.role})</span>
+                      </div>
+                    </label>
+                  `;
+                }).join('')}
+              </div>
+              <div class="text-[11px] text-slate-500 mt-1">✓ ติ๊กเลือกครูประจำชุมนุมได้หลายคนตามต้องการ</div>
             </div>
 
             <div>
@@ -892,7 +923,7 @@ export class ClubsModule {
               <textarea id="club-desc-input" rows="3" class="input-field py-1.5 text-xs" placeholder="สรุปเป้าหมายของชมรม...">${club ? decodeMojibakeThai(club.description) : ''}</textarea>
             </div>
 
-            <div class="flex justify-end gap-3 pt-3 border-t border-slate-100">
+            <div class="flex justify-end gap-3 pt-3 border-t border-slate-100 shrink-0">
               <button type="button" id="close-club-cancel" class="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl">ยกเลิก</button>
               <button type="submit" class="btn-primary px-5 py-2 text-xs font-bold rounded-xl shadow-md shadow-indigo-500/20">
                 ${isEdit ? '💾 บันทึกการแก้ไข' : '➕ ยืนยันการสร้างชมรม'}
@@ -908,9 +939,13 @@ export class ClubsModule {
 
     modalEl.querySelector('#club-form-el').addEventListener('submit', (e) => {
       e.preventDefault();
+      const selectedTeachers = Array.from(modalEl.querySelectorAll('input[name="club-teacher-check"]:checked')).map(cb => cb.value);
+      const teacherNameStr = selectedTeachers.length > 0 ? selectedTeachers.join(', ') : 'ไม่ระบุครูประจำชุมนุม';
+
       const payload = {
         name: document.getElementById('club-name-input').value.trim(),
-        teacherName: document.getElementById('club-teacher-input').value.trim(),
+        teachers: selectedTeachers,
+        teacherName: teacherNameStr,
         meetingTime: document.getElementById('club-time-input').value.trim(),
         maxCapacity: parseInt(document.getElementById('club-cap-input').value, 10) || 40,
         description: document.getElementById('club-desc-input').value.trim(),
